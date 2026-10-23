@@ -485,6 +485,7 @@ func _physics_process(dt: float) -> void:
 		"frontshot": _run_frontshot()                         # driven by _menushot() timers
 		"trailer": _run_trailer()
 		"fliptest": _run_fliptest()
+		"contacttest": _run_contacttest()
 		_: finish("unknown test")
 
 func finish(msg := "") -> void:
@@ -1259,6 +1260,7 @@ const CLIPS := {
 	"q_cars": [0.0, 12.2, "", ""],
 }
 var _fly_pos := Vector3.ZERO
+var _pile_max := 0.0
 var _wreck_t := -1.0
 var _wreck_p0 := Vector3.ZERO
 const CAR_NAMES := {"gt": "Cutlass 442 - front V8", "fastback": "Kiri Turbo - turbo four",
@@ -1325,6 +1327,11 @@ func _run_trailer() -> void:
 	var fr := int(round(_t * 120.0))
 	if fr == int(round((t0 + 0.6) * 120.0)) and clip != "cars" and clip != "crash" and not clip.begins_with("q_"):
 		_caption(c[2], c[3])
+	if clip.begins_with("q_") and race != null and fr > 240:
+		for c2: Car in race.cars:
+			_pile_max = maxf(_pile_max, c2.global_position.y - race.center[race.index_of(c2)].y)
+		if fr % 600 == 0:
+			_log.append("t=%d highest car above the road so far: %.2f m" % [fr / 120, _pile_max])
 	match clip:
 		"q_start":
 			cam.mode = 0
@@ -1463,7 +1470,117 @@ func _run_trailer() -> void:
 	if fr == 200:
 		_log.append("caption rect %s" % str(_cap.get_global_rect()))
 	if _t > t1:
+		if clip.begins_with("q_"):
+			_log.append("highest car above the road: %.2f m" % _pile_max)
 		finish("trailer clip %s" % clip)
+
+var _ct_other: Car
+var _ct_case := -1
+var _ct_t := 0.0
+var _ct_max := [0.0, 0.0]
+var _ct_spin := [0.0, 0.0]
+var _ct_worst := ""
+const CT_CASES := ["side swipe 110 km/h", "rear end 130 vs 40 km/h", "T-bone 90 km/h", "side swipe 160 km/h", "nose to door 60 km/h",
+	"over a loose bumper 100 km/h", "over a loose bumper 160 km/h", "T-bone 150 km/h", "nose to door 120 km/h", "T-bone 200 km/h"]
+var _ct_debris: RigidBody3D
+var _ct_jmax := 0.0
+func _run_contacttest() -> void:
+	## two cars hit each other in different ways; neither may be thrown into the air
+	Car.debug_contacts = true
+	var dt := 1.0 / 120.0
+	_ct_t += dt
+	if _ct_other == null:
+		_ct_other = Car.new()
+		_ct_other.name = "Other"
+		_ct_other.spec_id = "midship"
+		add_child(_ct_other)
+	if _ct_case < 0 or _ct_t > 4.0:
+		if _ct_case >= 0:
+			_log.append("%-30s you: max height %.2f m spin %.1f   other: max height %.2f m spin %.1f   biggest hit %.0f N s%s" % [CT_CASES[_ct_case], _ct_max[0], _ct_spin[0], _ct_max[1], _ct_spin[1], _ct_jmax, "   <-- LAUNCH" if maxf(_ct_max[0], _ct_max[1]) > 1.2 else ""])
+			if _ct_worst != "":
+				_log.append("    worst moment: " + _ct_worst)
+			_log.append("    parts off: you %s / other %s" % [str(car.parts.gone.keys()), str(_ct_other.parts.gone.keys())])
+		_ct_case += 1
+		if _ct_case >= CT_CASES.size():
+			finish("contact test done")
+			return
+		for c: Car in [car, _ct_other]:
+			c.parts.repair()
+			c.reset_crush()
+			c.mass = c.mass_kg
+		var base := Vector3(100, 0.5, 300)
+		_ct_t = 0.0
+		_ct_max = [0.0, 0.0]
+		_ct_spin = [0.0, 0.0]
+		_ct_worst = ""
+		_ct_jmax = 0.0
+		if _ct_debris != null:
+			_ct_debris.queue_free()
+			_ct_debris = null
+		match _ct_case:
+			0, 3:
+				var v := 30.5 if _ct_case == 0 else 44.0
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(2.6, 0, 0), 0.0)
+				car.linear_velocity = Vector3(0, 0, -v)
+				_ct_other.linear_velocity = Vector3(0, 0, -v)
+			1:
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(0, 0, -25), 0.0)
+				car.linear_velocity = Vector3(0, 0, -36.0)
+				_ct_other.linear_velocity = Vector3(0, 0, -11.0)
+			2:
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(0, 0, -30), PI * 0.5)
+				car.linear_velocity = Vector3(0, 0, -25.0)
+			4:
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(-1.2, 0, -14), PI * 0.5)
+				car.linear_velocity = Vector3(0, 0, -16.7)
+			7, 9:
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(0, 0, -30), PI * 0.5)
+				car.linear_velocity = Vector3(0, 0, -41.7 if _ct_case == 7 else -55.6)
+			8:
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(-1.2, 0, -20), PI * 0.5)
+				car.linear_velocity = Vector3(0, 0, -33.3)
+			5, 6:
+				# a broken-off bumper lying across the road, as the damage model drops it
+				car.reset_car(base, 0.0)
+				_ct_other.reset_car(base + Vector3(30, 0, 0), 0.0)
+				car.linear_velocity = Vector3(0, 0, -(27.8 if _ct_case == 5 else 44.4))
+				_ct_debris = RigidBody3D.new()
+				_ct_debris.name = "Loose_Bumper_F"
+				_ct_debris.mass = 7.0
+				_ct_debris.collision_layer = 4
+				_ct_debris.collision_mask = 1 | 2 | 4
+				var cs := CollisionShape3D.new()
+				var bx := BoxShape3D.new()
+				bx.size = Vector3(1.7, 0.32, 0.35)
+				cs.shape = bx
+				_ct_debris.add_child(cs)
+				add_child(_ct_debris)
+				_ct_debris.global_position = base + Vector3(0.0, -0.3, -30.0)
+		for c: Car in [car, _ct_other]:
+			for w in c.wheels:
+				w.omega = -c.linear_velocity.z / Car.WHEEL_R if c.linear_velocity.length() > 0.1 else 0.0
+	var steer := -0.25 if (_ct_case == 0 or _ct_case == 3) and _ct_t > 0.4 and _ct_t < 1.6 else 0.0
+	car.ai_input = {"throttle": 0.5 if _ct_t < 1.5 else 0.0, "brake": 0.0 if _ct_t < 1.5 else 0.5, "steer": steer, "handbrake": 0.0}
+	_ct_other.ai_input = {"throttle": 0.3 if _ct_case != 2 and _ct_case != 4 else 0.0, "brake": 0.0, "steer": 0.0, "handbrake": 0.0}
+	for c: Car in [car, _ct_other]:
+		for line: String in c.dbg_contacts:
+			var j := float(line.split(" j")[1].split(" ")[0])
+			_ct_jmax = maxf(_ct_jmax, j)
+	var k := 0
+	for c: Car in [car, _ct_other]:
+		var h := c.global_position.y - 0.0
+		if h > _ct_max[k]:
+			_ct_max[k] = h
+			if h > 0.6 and _ct_worst == "":
+				_ct_worst = "t=%.2f %s h=%.2f vy=%.1f av=%s contacts: %s" % [_ct_t, "you" if k == 0 else "other", h, c.linear_velocity.y, str(c.angular_velocity.snapped(Vector3(0.1, 0.1, 0.1))), " | ".join(c.dbg_contacts)]
+		_ct_spin[k] = maxf(_ct_spin[k], c.angular_velocity.length())
+		k += 1
 
 func _run_fliptest() -> void:
 	## roll the car onto its roof: the turn-over button must appear and put it back on its wheels

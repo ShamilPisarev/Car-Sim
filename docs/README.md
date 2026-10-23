@@ -63,7 +63,7 @@ kerbs, gravel, slides and impacts.
 ## Self tests
 `godot --headless --fixed-fps 120 --path godot -- --selftest=NAME [--car=fastback] [--arcade] [--rain]
 [--night|--sunset] [--reverse] [--setup=downforce:2,gearing:-1] [--from=200]`, result in `godot/selftest_NAME.txt`.
-Physics: settle, accel, brake, corner, drift, bumps, crash, lap. Race: race (all six AI-driven), ai1,
+Physics: settle, accel, brake, corner, drift, bumps, crash, lap, contacttest (car-to-car crashes), offtrack, fliptest. Race: race (all six AI-driven), ai1,
 pittest, champtest, tttest, terraincheck. Audio: audio (writes `shots/engine_sample.wav`).
 Screenshots (run without `--headless`): shot, trackshot, crashshot, raceshot, driftshot, dentshot,
 carsshot, menushot, hillshot, replayshot.

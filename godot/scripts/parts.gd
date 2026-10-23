@@ -630,17 +630,45 @@ func _detach_wheel(w: Car.Wheel, impulse: float) -> void:
 	car.mass -= 24.0
 	_loose_settle(rb)
 
+const FRESH_DEBRIS := 8           # collision layer of a part that has only just broken off
+
 func _loose_settle(rb: RigidBody3D) -> void:
-	## a part that breaks off starts inside the car's own collision hull: if the two could touch,
-	## the solver would push them apart hard enough to throw the car into the air. It never
-	## collides with the car it came from; other cars can hit it once it is clear (0.6 s).
+	## A part that breaks off starts where it sat on the car, so inside its own car's hull and,
+	## in a crash, often inside the other car as well. Any car that touched it then would be
+	## pushed out by the solver hard enough to be thrown into the air. So a fresh part lives on
+	## its own layer that no car collides with; it becomes solid for cars once it is clear of
+	## every car, and never collides with the car it came from.
 	rb.add_collision_exception_with(car)
 	car.add_collision_exception_with(rb)
-	var wr: WeakRef = weakref(rb)
-	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+	rb.collision_layer = FRESH_DEBRIS
+	rb.collision_mask = 1 | 4 | FRESH_DEBRIS
+	_try_harden(weakref(rb), 0.5)
+
+func _try_harden(wr: WeakRef, wait: float) -> void:
+	get_tree().create_timer(wait).timeout.connect(func() -> void:
 		var r: RigidBody3D = wr.get_ref() as RigidBody3D
-		if r != null:
-			r.collision_mask = 1 | 2 | 4)
+		if r == null:
+			return
+		if _overlaps_a_car(r):
+			_try_harden(wr, 0.3)
+			return
+		r.collision_layer = 4
+		r.collision_mask = 1 | 2 | 4)
+
+func _overlaps_a_car(r: RigidBody3D) -> bool:
+	var space := r.get_world_3d().direct_space_state
+	for ch in r.get_children():
+		var cs := ch as CollisionShape3D
+		if cs == null or cs.shape == null:
+			continue
+		var q := PhysicsShapeQueryParameters3D.new()
+		q.shape = cs.shape
+		q.transform = cs.global_transform
+		q.collision_mask = 2
+		q.margin = 0.05
+		if not space.intersect_shape(q, 1).is_empty():
+			return true
+	return false
 
 func repair() -> void:
 	for n in gone.keys():

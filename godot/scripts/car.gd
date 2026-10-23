@@ -1152,7 +1152,15 @@ func set_xray(mode: int) -> void:
 		if shell and not parts.gone.has(n):
 			mi.visible = (mode == 0)
 
+var dbg_contacts: Array = []
+static var debug_contacts := false
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if debug_contacts:
+		dbg_contacts.clear()
+		for i in state.get_contact_count():
+			var ob := state.get_contact_collider_object(i)
+			var lp := global_transform.affine_inverse() * state.get_contact_local_position(i)
+			dbg_contacts.append("%s j%.0f n%s at%s" % [ob.name if ob else "?", state.get_contact_impulse(i).length(), str(state.get_contact_local_normal(i).snapped(Vector3(0.01, 0.01, 0.01))), str(lp.snapped(Vector3(0.01, 0.01, 0.01)))])
 	for i in state.get_contact_count():
 		var imp := state.get_contact_impulse(i)
 		var j := imp.length()
