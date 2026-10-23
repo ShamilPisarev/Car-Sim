@@ -113,7 +113,7 @@ static func asphalt(vcol := true) -> ShaderMaterial:
 static func grass() -> ShaderMaterial:
 	var g := _noise(23, FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.06, 4, 512)
 	var n := _noise(23, FastNoiseLite.TYPE_SIMPLEX_SMOOTH, 0.06, 4, 512, true, 9.0)
-	return _make(g, n, Color(0.13, 0.22, 0.07), Color(0.26, 0.31, 0.12), 0.35, 0.8, 0.85, 1.0, 0.8, false, 0.35)
+	return _make(g, n, Color(0.10, 0.20, 0.06), Color(0.21, 0.30, 0.10), 0.35, 0.8, 0.85, 1.0, 0.8, false, 0.35)
 
 static func gravel() -> ShaderMaterial:
 	var g := _noise(37, FastNoiseLite.TYPE_CELLULAR, 0.14, 1, 512)

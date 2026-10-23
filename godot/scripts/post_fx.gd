@@ -11,7 +11,7 @@ void fragment() {
 	vec2 uv = SCREEN_UV;
 	vec2 d = uv - vec2(0.5, 0.52);
 	float edge = smoothstep(0.18, 0.62, length(d * vec2(1.0, 0.8)));
-	float s = strength * edge * 0.035;
+	float s = strength * edge * 0.02;
 	vec3 c = vec3(0.0);
 	for (int i = 0; i < 8; i++) {
 		c += textureLod(screen, uv - d * s * float(i), 0.0).rgb;
@@ -41,8 +41,8 @@ func _process(_dt: float) -> void:
 	if car == null or cam == null:
 		return
 	var kmh := car.linear_velocity.length() * 3.6
-	var s := clampf((kmh - 140.0) / 160.0, 0.0, 1.0)
-	if cam.mode == 3 or cam.mode == 4 or cam.mode == 5:
+	var s := clampf((kmh - 170.0) / 150.0, 0.0, 1.0)
+	if cam.mode >= 3:
 		s = 0.0                      # orbit, top and replay cameras stay clean
 	_mat.set_shader_parameter("strength", s)
 	_rect.visible = s > 0.01

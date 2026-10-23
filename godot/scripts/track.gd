@@ -210,6 +210,7 @@ func _ready() -> void:
 	_build_pitlane()
 	_build_decor()
 	_build_trees()
+	_build_grass()
 	_build_hills()
 	_build_props()
 	_build_floodlights()
@@ -1417,10 +1418,7 @@ func _build_trees() -> void:
 	for i in range(0, _n, 6):
 		coarse.append(_pos[i])
 	var trunk_xf: Array[Transform3D] = []
-	var crown_xf: Array[Transform3D] = []
-	var crown_col: Array[Color] = []
-	var leaf_xf: Array[Transform3D] = []
-	var leaf_col: Array[Color] = []
+	var buckets := {}
 	var tries: int = 0
 	while trunk_xf.size() < 1100 and tries < 12000:
 		tries += 1
@@ -1441,56 +1439,62 @@ func _build_trees() -> void:
 				break
 		if not ok:
 			continue
-		var sc: float = rng.randf_range(0.7, 1.5)
+		var sc: float = rng.randf_range(0.75, 1.35)
 		var yaw: Basis = Basis(Vector3.UP, rng.randf() * TAU)
-		var tb: Basis = yaw.scaled(Vector3(sc, sc, sc))
 		var gy := terrain_height(px, pz)
-		trunk_xf.append(Transform3D(tb, Vector3(px, gy + 1.5 * sc, pz)))
-		var g: float = rng.randf_range(0.7, 1.15)
-		if rng.randf() < 0.55:
-			# conifer: three stacked cones, slightly narrower towards the top
-			for tier in range(3):
-				var ts: float = sc * (1.0 - 0.22 * float(tier)) * rng.randf_range(0.92, 1.08)
-				var tbas: Basis = Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(ts, ts * 0.8, ts))
-				crown_xf.append(Transform3D(tbas, Vector3(px, gy + sc * (4.2 + 2.6 * float(tier)), pz)))
-				crown_col.append(Color(0.07 * g, 0.17 * g, 0.07 * g))
-		else:
-			# broadleaf: a cluster of squashed spheres in olive / summer greens
-			var hue: float = rng.randf()
-			var base: Color = Color(0.16, 0.26, 0.08).lerp(Color(0.24, 0.30, 0.10), hue) * g
-			for blob in range(4):
-				var off: Vector3 = Vector3(rng.randf_range(-1.4, 1.4), rng.randf_range(-0.6, 1.2), rng.randf_range(-1.4, 1.4)) * sc
-				var bs: float = sc * rng.randf_range(1.6, 2.3)
-				leaf_xf.append(Transform3D(Basis.IDENTITY.scaled(Vector3(bs, bs * 0.8, bs)), Vector3(px, gy + 5.6 * sc, pz) + off))
-				leaf_col.append(base * rng.randf_range(0.85, 1.12))
+		var conifer := rng.randf() < 0.5
+		var v := rng.randi_range(0, 2) if not conifer else rng.randi_range(0, 1)
+		var key := ("c%d" if conifer else "b%d") % v
+		if not buckets.has(key):
+			buckets[key] = [[] as Array[Transform3D], []]
+		(buckets[key][0] as Array[Transform3D]).append(Transform3D(yaw.scaled(Vector3(sc, sc * rng.randf_range(0.9, 1.1), sc)), Vector3(px, gy, pz)))
+		var g := rng.randf_range(0.8, 1.12)
+		var tint := Color(g, g, g) if conifer else Color(g, g * rng.randf_range(0.95, 1.05), g * rng.randf_range(0.8, 1.0))
+		(buckets[key][1] as Array).append(tint)
+		trunk_xf.append(Transform3D())
 	if trunk_xf.is_empty():
 		return
-	if not leaf_xf.is_empty():
-		var sm: SphereMesh = SphereMesh.new()
-		sm.radius = 1.0
-		sm.height = 2.0
-		sm.radial_segments = 10
-		sm.rings = 6
-		sm.material = _foliage_mat()
-		_add_multimesh("TreeLeaves", sm, leaf_xf, leaf_col, true)
-	var tm: CylinderMesh = CylinderMesh.new()
-	tm.top_radius = 0.18
-	tm.bottom_radius = 0.28
-	tm.height = 3.0
-	tm.radial_segments = 6
-	tm.rings = 1
-	var tmat: StandardMaterial3D = StandardMaterial3D.new()
-	tmat.albedo_color = Color(0.28, 0.2, 0.12)
-	tm.material = tmat
-	_add_multimesh("TreeTrunks", tm, trunk_xf, [], true)
-	var cm: CylinderMesh = CylinderMesh.new()
-	cm.top_radius = 0.0
-	cm.bottom_radius = 2.4
-	cm.height = 4.2
-	cm.radial_segments = 10
-	cm.rings = 2
-	cm.material = _foliage_mat()
-	_add_multimesh("TreeCrowns", cm, crown_xf, crown_col, true)
+	# a few tree shapes, each drawn many times (one MultiMesh per shape)
+	for key: String in buckets.keys():
+		var mesh: ArrayMesh = Foliage.conifer_mesh(400 + key.unicode_at(1)) if key.begins_with("c") else Foliage.broadleaf_mesh(100 + key.unicode_at(1))
+		var xs: Array[Transform3D] = buckets[key][0]
+		_add_multimesh("Trees_" + key, mesh, xs, buckets[key][1], true)
+
+
+func _build_grass() -> void:
+	## clumps of long grass on the verges and the banks behind the barriers; built in ~120 m
+	## blocks so each block can fade out with distance on its own
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9137
+	var mesh := Foliage.grass_mesh()
+	var block := 60
+	var i0 := 0
+	while i0 < _n:
+		var xs: Array[Transform3D] = []
+		var cols: Array = []
+		for i in range(i0, mini(i0 + block, _n)):
+			for side: float in [-1.0, 1.0]:
+				var gout: PackedFloat32Array = _gravel_out[0 if side < 0 else 1] if _gravel_out.size() == 2 else _fill(0.0)
+				var barrier := maxf(15.0, gout[i] + 2.5)
+				for k in 8:
+					# denser close to the road, thinning out up the banks
+					var lat := 9.6 + pow(rng.randf(), 1.6) * 32.0
+					if lat < gout[i] + 0.8 or absf(lat - barrier) < 0.9:
+						continue
+					var p := _pos[i] + _right[i] * (side * lat) + (_pos[(i + 1) % _n] - _pos[i]).normalized() * rng.randf_range(-1.0, 1.0)
+					if _on_pit_straight(p) or not _clear_of_track(p, i, 9.0):
+						continue
+					var sc := rng.randf_range(0.7, 1.5)
+					var b := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(sc, sc * rng.randf_range(0.8, 1.3), sc))
+					xs.append(Transform3D(b, Vector3(p.x, terrain_height(p.x, p.z) - 0.04, p.z)))
+					var g := rng.randf_range(0.75, 1.1)
+					cols.append(Color(g, g * rng.randf_range(0.95, 1.05), g * rng.randf_range(0.85, 1.0)))
+		if not xs.is_empty():
+			var mi := _add_multimesh("Grass", mesh, xs, cols, false)
+			mi.visibility_range_end = 110.0
+			mi.visibility_range_end_margin = 20.0
+			mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		i0 += block
 
 
 func _foliage_mat() -> StandardMaterial3D:

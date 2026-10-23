@@ -100,12 +100,12 @@ void sky() {
 
 # time of day presets: sun angle (pitch, yaw), colour, energy; sky colours; fog; exposure
 const PRESETS := {
-	"day": {"rot": Vector3(-30, -58, 0), "col": Color(1.0, 0.92, 0.80), "energy": 2.1,
+	"day": {"rot": Vector3(-30, -58, 0), "col": Color(1.0, 0.92, 0.80), "energy": 2.4,
 		"zenith": Color(0.16, 0.34, 0.72), "horizon": Color(0.70, 0.78, 0.86), "glow": Color(1.0, 0.62, 0.32),
-		"fog": Color(0.66, 0.73, 0.82), "density": 0.00055, "ambient": 0.9, "exposure": 1.05, "night": 0.0, "disc": 40.0},
+		"fog": Color(0.66, 0.73, 0.82), "density": 0.00036, "ambient": 0.65, "exposure": 1.05, "night": 0.0, "disc": 40.0},
 	"sunset": {"rot": Vector3(-6, -96, 0), "col": Color(1.0, 0.58, 0.30), "energy": 1.7,
 		"zenith": Color(0.18, 0.24, 0.46), "horizon": Color(0.96, 0.62, 0.40), "glow": Color(1.0, 0.45, 0.18),
-		"fog": Color(0.80, 0.58, 0.46), "density": 0.0007, "ambient": 0.55, "exposure": 1.15, "night": 0.0, "disc": 30.0},
+		"fog": Color(0.80, 0.58, 0.46), "density": 0.0006, "ambient": 0.45, "exposure": 1.15, "night": 0.0, "disc": 30.0},
 	"night": {"rot": Vector3(-48, 35, 0), "col": Color(0.62, 0.72, 1.0), "energy": 0.10,
 		"zenith": Color(0.006, 0.010, 0.028), "horizon": Color(0.035, 0.045, 0.08), "glow": Color(0.3, 0.35, 0.5),
 		"fog": Color(0.03, 0.04, 0.07), "density": 0.0009, "ambient": 0.22, "exposure": 1.5, "night": 1.0, "disc": 5.0},
@@ -132,7 +132,9 @@ func set_conditions(time: String, rain: bool) -> void:
 	env.fog_sun_scatter = 0.35 * (1.0 - r)
 	env.ambient_light_energy = p["ambient"] * (1.0 - 0.25 * r)
 	env.tonemap_exposure = p["exposure"] * (1.0 + 0.25 * r)
-	env.glow_intensity = 0.35 if time == "day" else 0.7          # lamps bloom in the dark
+	env.glow_intensity = 0.2 if time == "day" else 0.7           # lamps bloom in the dark
+	# screen-space reflections earn their cost on a wet road; dry, the paint uses the sky
+	env.ssr_enabled = rain
 
 func _environment() -> void:
 	env = Environment.new()
@@ -161,15 +163,15 @@ func _environment() -> void:
 	env.glow_hdr_threshold = 1.4
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.08
+	env.adjustment_contrast = 1.05
+	env.adjustment_saturation = 1.03
 	# contact shadows and screen-space reflections (wet-looking paint, glass)
 	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6
-	env.ssao_power = 1.4
-	env.ssr_enabled = true
-	env.ssr_max_steps = 48
+	env.ssao_radius = 0.8
+	env.ssao_intensity = 0.9
+	env.ssao_power = 1.2
+	env.ssr_enabled = false                    # switched on in the rain only (set_conditions)
+	env.ssr_max_steps = 32
 	env.ssr_fade_in = 0.2
 	env.ssr_fade_out = 2.0
 	# aerial perspective: distant scenery fades into a warm haze
