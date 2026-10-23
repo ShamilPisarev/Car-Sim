@@ -161,8 +161,8 @@ func _ready() -> void:
 		open_main_menu()
 	if selftest != "":
 		hud.visible = selftest == "raceshot"
-		if selftest != "trailer":
-			audio.toggle_mute()
+		if selftest != "trailer" or Engine.get_write_movie_path() == "":
+			audio.toggle_mute()          # tests stay silent; only a trailer recording keeps its sound (into the file)
 		else:
 			_trailer_setup()
 		if selftest == "crash" or selftest == "crashshot" or clip == "crash":
