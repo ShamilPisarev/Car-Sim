@@ -1458,7 +1458,7 @@ func _build_trees() -> void:
 	for key: String in buckets.keys():
 		var mesh: ArrayMesh = Foliage.conifer_mesh(400 + key.unicode_at(1)) if key.begins_with("c") else Foliage.broadleaf_mesh(100 + key.unicode_at(1))
 		var xs: Array[Transform3D] = buckets[key][0]
-		_add_multimesh("Trees_" + key, mesh, xs, buckets[key][1], true)
+		_add_multimesh("Trees_" + key, mesh, xs, buckets[key][1], not OS.has_feature("web"))
 
 
 func _build_grass() -> void:
@@ -1491,7 +1491,7 @@ func _build_grass() -> void:
 					cols.append(Color(g, g * rng.randf_range(0.95, 1.05), g * rng.randf_range(0.85, 1.0)))
 		if not xs.is_empty():
 			var mi := _add_multimesh("Grass", mesh, xs, cols, false)
-			mi.visibility_range_end = 110.0
+			mi.visibility_range_end = 110.0 if not OS.has_feature("web") else 55.0
 			mi.visibility_range_end_margin = 20.0
 			mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
 		i0 += block

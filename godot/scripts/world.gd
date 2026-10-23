@@ -196,6 +196,11 @@ func _environment() -> void:
 	sun.shadow_blur = 1.2
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 	sun.directional_shadow_max_distance = 260.0
+	if OS.has_feature("web"):
+		# the browser draws every shadow layer as extra draw calls on one thread: keep it lean
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun.directional_shadow_max_distance = 110.0
+		sun.directional_shadow_split_1 = 0.25
 	sun.directional_shadow_split_1 = 0.06
 	sun.directional_shadow_split_2 = 0.18
 	sun.directional_shadow_split_3 = 0.45
