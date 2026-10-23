@@ -20,6 +20,8 @@ var _r1 := EngineAudio.Biquad.new()
 var _r2 := EngineAudio.Biquad.new()
 var _sq := EngineAudio.Biquad.new()
 var _active := false
+var _last_pops := 0
+var _bang := 0.0
 
 var _tl := PackedFloat32Array()
 var _to := PackedFloat32Array()
@@ -65,6 +67,10 @@ func _process(dt: float) -> void:
 	_rpm_s = lerpf(_rpm_s, car.engine_rpm, clampf(dt * 20.0, 0.0, 1.0))
 	_thr_s = lerpf(_thr_s, 0.0 if car.shift_timer >= 0.06 else car.throttle, clampf(dt * 25.0, 0.0, 1.0))
 	var thr := _thr_s
+	thr = maxf(thr, clampf(car.blip_t / 0.18, 0.0, 1.0) * 0.8)
+	if car.pops != _last_pops:
+		_bang = 1.0
+		_last_pops = car.pops
 	var rpm_n := clampf(_rpm_s / car.limiter_rpm, 0.0, 1.0)
 	var f_cycle := _rpm_s / 120.0
 	var amp := (0.3 + 0.7 * thr) * (0.55 + 0.45 * rpm_n) * 0.6
@@ -94,6 +100,9 @@ func _process(dt: float) -> void:
 		var out := _lp * amp
 		if squeal > 0.01:
 			out += _sq.step(_rng.randf() * 2.0 - 1.0) * squeal * 0.5
+		if _bang > 0.003:
+			out += (_rng.randf() * 2.0 - 1.0) * _bang * 0.7
+			_bang *= 0.996
 		out = tanh(out * 1.3) * 0.85
 		buf[i] = Vector2(out, out)
 	pb.push_buffer(buf)

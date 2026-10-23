@@ -7,6 +7,8 @@ extends Node
 const AI_COUNT := 5
 var ai_count := AI_COUNT
 const LAPS := 3
+const AI_LEVELS := [["Easy", 0.93], ["Medium", 0.965], ["Hard", 1.0], ["Expert", 1.015]]
+static var ai_level := 2
 var laps := LAPS                             # 0 = practice: no finish, lap after lap
 var _all_ai: Array[Car] = []                 # every opponent built, active or not
 var _all_names: Array[String] = []
@@ -106,7 +108,10 @@ func setup(t, p: Car, cam: Node3D) -> void:
 		drv.car = c
 		drv.grid_slot = slot
 		# the field is spread a little: the front runners are a touch quicker
-		drv.base_skill = 0.965 - 0.012 * k + rng.randf_range(-0.006, 0.006)
+		drv.base_skill = 0.955 + rng.randf_range(-0.01, 0.01)
+		drv.late_braker = rng.randf()
+		drv.defender = rng.randf()
+		drv.steadiness = rng.randf()
 		drv.skill = drv.base_skill
 		drv.aggression = rng.randf_range(0.3, 1.0)
 		c.add_child(drv)
@@ -179,6 +184,17 @@ func restart() -> void:
 	dnf.clear()
 	if SkidMarks.instance:
 		SkidMarks.instance.clear_marks()
+	# a different starting order every race (as if qualifying went differently); you keep your slot
+	var free_slots: Array[int] = []
+	for c in cars:
+		if c != player:
+			free_slots.append((c.get_node("Driver") as AIDriver).grid_slot)
+	free_slots.shuffle()
+	var si := 0
+	for c in cars:
+		if c != player:
+			(c.get_node("Driver") as AIDriver).grid_slot = free_slots[si]
+			si += 1
 	for c in cars:
 		var slot := PLAYER_SLOT
 		if c != player:
@@ -186,7 +202,7 @@ func restart() -> void:
 			var dr := c.get_node("Driver") as AIDriver
 			dr.reset_state()
 			# form on the day: a driver can be a little quicker or slower than usual
-			dr.skill = dr.base_skill + randf_range(-0.014, 0.014)
+			dr.skill = (dr.base_skill + randf_range(-0.018, 0.018)) * AI_LEVELS[ai_level][1]
 		var tr: Transform3D = track.get_grid_transform(slot)
 		c.reset_car(tr.origin - Vector3(0, 0.17, 0), tr.basis.get_euler().y)
 		c.parts.repair()

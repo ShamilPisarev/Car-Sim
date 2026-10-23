@@ -11,6 +11,11 @@ var grid_slot := 0
 var skill := 0.95                 # fraction of the planned speed this driver dares to carry
 var base_skill := 0.95            # the driver's usual level; `skill` varies around it race to race
 var aggression := 0.6             # how late it brakes when fighting for position
+# personality (set by the race): how late it brakes, how hard it defends, how steady it is
+var late_braker := 0.5            # 0 cautious .. 1 brakes very late
+var defender := 0.5               # 0 lets you by .. 1 covers the inside when you are close behind
+var steadiness := 0.5             # 0 makes more mistakes .. 1 very consistent
+var _defend_side := 0.0           # inside line chosen while defending (kept until the corner)
 
 var _avoid := 0.0                 # lateral offset from the racing line, m
 var _stuck_t := 0.0
@@ -19,6 +24,34 @@ var _rev_phase := 0.0
 var _mistake_t := 0.0
 var _lane := 0.0                  # grid lane relative to the racing line, held for the first seconds
 var _lane_set := false
+
+func _defend(want: float, i: int, v: float, line_here: float, w_max: float) -> float:
+	## a car close behind and a braking zone coming: move once to the inside of the next
+	## corner and hold it (no weaving). Only drivers with a defending streak do it.
+	if defender < 0.45:
+		return want
+	var n := race.n
+	var behind := false
+	for o in race.cars:
+		if o == car or race.dnf.has(o):
+			continue
+		var g := race.gap_along(o, car)
+		if g > 2.0 and g < 14.0 and o.linear_velocity.length() > v - 2.0:
+			behind = true
+	# the next real braking point within 160 m, and the inside of that corner
+	var apex := -1
+	var steps := int(160.0 / race.ds)
+	for k in range(4, steps, 3):
+		if race.line_speed[(i + k) % n] < v * 0.82:
+			apex = (i + k) % n
+			break
+	if not behind or apex < 0:
+		_defend_side = 0.0
+		return want
+	if _defend_side == 0.0:
+		var inside: float = signf(race.line_lat[(apex + int(30.0 / race.ds)) % n])
+		_defend_side = inside if inside != 0.0 else 1.0
+	return _defend_side * (w_max - 0.8) - line_here
 
 func reset_state() -> void:
 	_avoid = 0.0
@@ -44,7 +77,8 @@ func _physics_process(dt: float) -> void:
 		_avoid = _lane
 		_lane_set = true
 	# ---- speed target from the plan (a little ahead, the car needs time to react)
-	var look_brake := int(clampf(v * 0.35, 2.0, 30.0) / race.ds)
+	# late brakers react to the speed plan a little later
+	var look_brake := int(clampf(v * (0.42 - 0.14 * late_braker), 2.0, 30.0) / race.ds)
 	var vt := INF
 	for k in range(0, look_brake + 1, 2):
 		vt = minf(vt, race.line_speed[(i + k) % n])
@@ -92,6 +126,7 @@ func _physics_process(dt: float) -> void:
 			var dl := my_lat - o_lat
 			if absf(dl) < 2.4:
 				want_avoid = (line_here + _avoid) - line_here + signf(dl if dl != 0.0 else 1.0) * (2.4 - absf(dl)) * 1.5
+	want_avoid = _defend(want_avoid, i, v, line_here, w_max)
 	want_avoid = clampf(want_avoid, -w_max - line_here, w_max - line_here)
 	# feeling the car run wide (understeer): ease off until it comes back to the line
 	var line_err := absf(my_lat - (race.line_lat[i] + _avoid))
@@ -124,7 +159,7 @@ func _physics_process(dt: float) -> void:
 	# once in a while a small error (late turn-in / early lift), so races are not a procession
 	_mistake_t -= dt
 	if _mistake_t <= 0.0:
-		_mistake_t = randf_range(6.0, 18.0) * (0.5 + skill)
+		_mistake_t = randf_range(6.0, 18.0) * (0.5 + skill) * (0.6 + 0.8 * steadiness)
 	elif _mistake_t < 0.35 and v > 30.0:
 		thr *= 0.5
 	car.ai_input = {"throttle": thr, "brake": brk, "steer": st, "handbrake": 0.0}

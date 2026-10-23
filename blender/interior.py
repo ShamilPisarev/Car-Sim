@@ -3,6 +3,7 @@ trunk with fuel/battery; lights, aero kit and small exterior parts."""
 from lib import *
 from body import AXLE_F, AXLE_R, BELT, Y_DECK, Y_COWL, NOSE, TAIL, HUMP
 from variants import S, top_at, roof_at
+from math import atan2, sqrt
 
 FY = NOSE - 2.35          # shift of nose-mounted parts relative to the original car
 RY = TAIL + 2.33          # shift of tail-mounted parts
@@ -238,8 +239,11 @@ def build_aero_and_lights(root, parts, body_grp):
     prof = [(cy + y, cz + z) for y, z in prof]
     wing = airfoil("_w", [(y, z) for y, z in prof], -span, span, 'carbon')
     flap = box("_gf", (span * 2.0, 0.008, 0.035), (0, cy - 0.285, cz + 0.02), 'carbon')
-    plates = [box("_p1", (0.012, 0.42, 0.20), (-span - 0.01, cy - 0.12, cz + 0.02), 'carbon'),
-              box("_p2", (0.012, 0.42, 0.20), (span + 0.01, cy - 0.12, cz + 0.02), 'carbon')]
+    # shaped end plates (swept leading edge, raked top) instead of flat rectangles
+    ep = [(cy + 0.10, cz - 0.11), (cy - 0.36, cz - 0.11), (cy - 0.42, cz + 0.02), (cy - 0.36, cz + 0.15),
+          (cy - 0.05, cz + 0.12), (cy + 0.10, cz + 0.02)]
+    plates = [airfoil("_p1", ep, -span - 0.016, -span - 0.004, 'carbon'),
+              airfoil("_p2", ep, span + 0.004, span + 0.016, 'carbon')]
     base_y = cy + 0.12
     base_z = top_at(S["rear"], base_y) - 0.03
     if S["lamps"] == "round":
@@ -253,9 +257,24 @@ def build_aero_and_lights(root, parts, body_grp):
     wing_all = join([wing, flap] + plates + ups, "RearWing")
     reparent(wing_all, trunk)
     # diffuser with strakes
-    dif = [box("_df", (1.40, 0.55, 0.012), (0, -2.12 + RY, 0.20), 'carbon', rot=(0.18, 'X'))]
-    for i in range(5):
-        dif.append(box("_st", (0.012, 0.55, 0.10), (-0.55 + 0.275 * i, -2.12 + RY, 0.24), 'carbon', rot=(0.18, 'X')))
+    # diffuser: a roof ramping up from the floor to the tail, split into tunnels by strakes, with
+    # side fences. It closes the underside of the tail, so from behind you see a proper diffuser
+    # exit (and the exhaust tips in it) instead of the gearbox and silencers.
+    z_exit = S["rear"][-1][2] + 0.01               # just meets the bottom of the bumper skin
+    L = 0.88
+    y0, y1 = TAIL + L, TAIL + 0.02
+    zf = 0.15
+    ang = atan2(z_exit - zf, y0 - y1)
+    mid = ((y0 + y1) * 0.5, (zf + z_exit) * 0.5)
+    run = sqrt((y0 - y1) ** 2 + (z_exit - zf) ** 2)
+    dif = [box("_roof", (1.64, run, 0.012), (0, mid[0], mid[1]), 'carbon', rot=(-ang, 'X'))]
+    for x in (-0.60, -0.30, 0.30, 0.60):
+        dif.append(box("_st", (0.014, run * 0.96, 0.11), (x, mid[0] - 0.01, mid[1] - 0.05), 'carbon', rot=(-ang, 'X')))
+    for x in (-0.81, 0.81):
+        dif.append(box("_fence", (0.016, run, 0.17), (x, mid[0], mid[1] - 0.06), 'carbon', rot=(-ang, 'X')))
+    # trailing lip on the exit and the FIA rain light in the middle
+    dif.append(box("_lip", (1.64, 0.03, 0.035), (0, TAIL + 0.03, z_exit + 0.005), 'carbon'))
+    dif.append(box("_rain", (0.11, 0.02, 0.05), (0, TAIL + 0.012, z_exit - 0.035), 'ledred'))
     reparent(join(dif, "Diffuser"), br)
     # plates / numbers
     reparent(box("Plate_F", (0.46, 0.012, 0.10), (0, 2.355 + FY, 0.26), 'plate'), bf)

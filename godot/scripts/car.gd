@@ -147,6 +147,19 @@ var speed_cap := 0.0                             # pit-lane limiter, m/s (0 = of
 var nose_len := 2.35                             # body ends from the centre, m
 var tail_len := 2.33
 var fx: TyreFX
+static var all_cars: Array[Car] = []             # every car in the scene (slipstream)
+var tow := 0.0                                   # 0..1: how much the car ahead's wake is cutting our drag
+# exhaust events (sound and flames listen for changes): pops on lift-off and hard upshifts,
+# a throttle blip on every downshift
+var pops := 0
+var blip_t := 0.0
+var _prev_thr := 0.0
+var _prev_gear := 1
+var _pop_queue := 0
+var _pop_timer := 0.0
+var _since_upshift := 9.0                        # stops the auto box hunting between two gears
+var _pop_gap := 0.0
+var brake_temp := [80.0, 80.0, 80.0, 80.0]      # disc temperature per wheel, deg C (glow above ~450)
 
 func _apply_spec() -> void:
 	spec = CarSpecs.get_spec(spec_id)
@@ -162,6 +175,35 @@ func _apply_spec() -> void:
 	nose_len = spec["nose"]
 	tail_len = spec["tail"]
 	engine_rpm = idle_rpm
+
+func _enter_tree() -> void:
+	if not all_cars.has(self):
+		all_cars.append(self)
+
+func _exit_tree() -> void:
+	all_cars.erase(self)
+
+func _slipstream() -> float:
+	## the wake of a car ahead: much less drag when tucked in close behind it (fading out by
+	## ~40 m and with a sideways offset), measured in this car's frame
+	var best := 0.0
+	var b := global_transform.basis
+	var spd := linear_velocity.length()
+	if spd < 15.0:
+		return 0.0
+	for o in all_cars:
+		if o == self or not o.visible:
+			continue
+		var rel := b.inverse() * (o.global_position - global_position)
+		var ahead := -rel.z
+		if ahead < 4.0 or ahead > 40.0:
+			continue
+		var side := absf(rel.x)
+		if side > 2.6:
+			continue
+		var f := (1.0 - (ahead - 4.0) / 36.0) * (1.0 - side / 2.6)
+		best = maxf(best, f)
+	return best
 
 func _ready() -> void:
 	_apply_spec()
@@ -417,7 +459,9 @@ func _update_engine_thermal(dt: float) -> void:
 		var want := throttle * clampf((engine_rpm - 2200.0) / 2600.0, 0.0, 1.0)
 		boost = move_toward(boost, want, dt * (1.6 if want > boost else 4.0))
 	var load_f := throttle * (engine_rpm / limiter_rpm)
-	var target := 92.0 + 22.0 * load_f + (1.0 - coolant) * 130.0
+	# the engine copes with some coolant loss; it is the last half that makes it boil
+	var lost := 1.0 - coolant
+	var target := 92.0 + 22.0 * load_f + lost * lost * 150.0
 	var rate := (2.2 if target > engine_temp else 1.0) * (absf(target - engine_temp) / 25.0 + 0.15)
 	engine_temp = move_toward(engine_temp, target, dt * rate)
 	coolant = maxf(coolant - leak * dt, 0.0)
@@ -454,7 +498,7 @@ func _update_drivetrain(dt: float) -> float:
 	if not reverse_mode and not manual and shift_timer <= 0.0:
 		var rs := limiter_rpm / LIMITER_RPM                # shift points scale with the rev range
 		var up_rpm := (5200.0 + 3100.0 * throttle) * rs
-		var down_rpm := (2800.0 + 2200.0 * throttle) * rs
+		var down_rpm := (2800.0 + 1400.0 * throttle) * rs
 		# a real box will not short-shift while the rears are lit up in a drift / burnout
 		var spinning := false
 		for w in wheels:
@@ -465,7 +509,7 @@ func _update_drivetrain(dt: float) -> float:
 		if engine_rpm > up_rpm and gear < 6 and rpm_w > 0.0:
 			gear += 1
 			shift_timer = 0.16
-		elif gear > 1 and rpm_w < down_rpm and rpm_w * (GEAR_RATIOS[gear - 2] / GEAR_RATIOS[gear - 1]) < limiter_rpm * 0.85:
+		elif gear > 1 and rpm_w < down_rpm and (_since_upshift > 1.0 or throttle < 0.5 or rpm_w < limiter_rpm * 0.5) and rpm_w * (GEAR_RATIOS[gear - 2] / GEAR_RATIOS[gear - 1]) < limiter_rpm * 0.85:
 			gear -= 1
 			shift_timer = 0.14
 	elif manual and gear > 1 and not reverse_mode and rpm_w < 1700.0 and throttle < 0.1:
@@ -542,6 +586,7 @@ func _physics_process(dt: float) -> void:
 	_read_input(dt)
 	_stability(dt)
 	_update_engine_thermal(dt)
+	_exhaust_events(dt)
 	_wear_and_fuel(dt)
 	if use_setup:
 		_rumble(dt)
@@ -681,6 +726,11 @@ func _physics_process(dt: float) -> void:
 	if v2 > 0.1:
 		var df := CarSetup.downforce_scale() if use_setup else 1.0
 		var dr := CarSetup.drag_scale() if use_setup else 1.0
+		# slipstream: up to 35 % less drag in the tow; very close behind, the dirty air also
+		# costs some downforce (harder to follow through fast corners)
+		tow = lerpf(tow, _slipstream(), 0.1)
+		dr *= 1.0 - 0.35 * tow
+		df *= 1.0 - 0.15 * clampf((tow - 0.6) / 0.4, 0.0, 1.0)
 		apply_central_force(-vel.normalized() * 0.5 * 1.2 * CD_A * dr * v2 * v2)
 		var down := 0.5 * 1.2 * CL_A * df * v2 * v2 * clampf(v_fwd / maxf(v2, 0.1), 0.0, 1.0)
 		# the wing sits at the back: more wing angle moves the aero balance rearwards
@@ -820,6 +870,45 @@ func _rumble(dt: float) -> void:
 	var strong := _impact_rumble
 	if weak > 0.02 or strong > 0.02:
 		Input.start_joy_vibration(0, weak, strong, 0.08)
+
+func _pop() -> void:
+	if _pop_gap <= 0.0:
+		pops += 1
+		_pop_gap = 0.3
+
+func _exhaust_events(dt: float) -> void:
+	_since_upshift += dt
+	_pop_gap = maxf(_pop_gap - dt, 0.0)
+	if gear < _prev_gear and not reverse_mode:
+		blip_t = 0.18                                     # rev-matching blip on the way down
+		if throttle < 0.2 and engine_rpm > limiter_rpm * 0.5 and randf() < 0.65:
+			_pop()                                        # downshift into a braking zone
+	elif gear > _prev_gear:
+		_since_upshift = 0.0
+		if engine_rpm > limiter_rpm * 0.82 and throttle > 0.8:
+			_pop()                                        # flat-out upshift: one bang
+	_prev_gear = gear
+	blip_t = maxf(blip_t - dt, 0.0)
+	# lift off at high revs: unburnt fuel fires in the hot exhaust a few times
+	if _prev_thr > 0.6 and throttle < 0.2 and engine_rpm > limiter_rpm * 0.6:
+		_pop_queue = randi_range(2, 5)
+		_pop_timer = randf_range(0.04, 0.12)
+	_prev_thr = throttle
+	if _pop_queue > 0:
+		if throttle > 0.4:
+			_pop_queue = 0
+		else:
+			_pop_timer -= dt
+			if _pop_timer <= 0.0:
+				_pop()
+				_pop_queue -= 1
+				_pop_timer = randf_range(0.07, 0.2)
+	# brake discs: heat from braking work, cooled by the air flowing past
+	var spd := linear_velocity.length()
+	for k in wheels.size():
+		var w: Wheel = wheels[k]
+		var heat := _brake_torque(w, brake) * absf(w.omega) * 0.0016 * dt
+		brake_temp[k] = maxf(brake_temp[k] + heat - (brake_temp[k] - 60.0) * (0.08 + spd * 0.004) * dt, 60.0)
 
 func apply_setup() -> void:
 	## re-read CarSetup (gearing, spring preload) after it was changed in the menu

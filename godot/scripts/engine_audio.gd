@@ -35,6 +35,7 @@ var _road_lp := 0.0
 var _road_lp2 := 0.0
 var _jitter := 1.0
 var _last_gear := 1
+var _last_pops := 0
 var _rain_lp := 0.0
 var _wet_lp := 0.0
 var _shift_env := 0.0
@@ -167,6 +168,11 @@ func render(n: int, dt: float) -> PackedVector2Array:
 	var thr_target := 0.0 if cut else car.throttle
 	_thr_s = lerpf(_thr_s, thr_target, clampf(dt * 25.0, 0.0, 1.0))
 	var thr := _thr_s
+	# downshift blip: the engine note flares for a moment
+	thr = maxf(thr, clampf(car.blip_t / 0.18, 0.0, 1.0) * 0.8)
+	if car.pops != _last_pops:
+		_pop_env = maxf(_pop_env, _rng.randf_range(0.7, 1.0))
+		_last_pops = car.pops
 	var f_cycle := _rpm_s / 120.0                           # engine cycles per second
 	var rpm_n := clampf(_rpm_s / car.limiter_rpm, 0.0, 1.0)
 	var health := clampf(car.engine_health * 1.3, 0.25, 1.0)
@@ -257,7 +263,7 @@ func render(n: int, dt: float) -> PackedVector2Array:
 			if fmod(_limiter_t, 0.075) > 0.045:
 				out *= 0.2
 		# overrun crackle and shift bangs
-		if overrun > 0.15 and _rng.randf() < 0.0009 * overrun:
+		if overrun > 0.15 and _rng.randf() < 0.00012 * overrun:
 			_pop_env = maxf(_pop_env, _rng.randf_range(0.3, 0.8) * overrun)
 		if _pop_env > 0.003:
 			_pop_lp += (nz - _pop_lp) * 0.45

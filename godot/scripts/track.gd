@@ -213,6 +213,7 @@ func _ready() -> void:
 	_build_hills()
 	_build_props()
 	_build_floodlights()
+	_build_dressing()
 
 
 # ===================================================================== timing
@@ -1125,6 +1126,117 @@ func _wall_run(i0: int, count: int, lat: float, hw: float, h: float) -> void:
 		_wall_box(a, b, hw, h)
 		k = k2
 
+var _banner_spots: Array[Transform3D] = []
+
+func _clear_of_track(p: Vector3, own: int, min_d: float) -> bool:
+	## true when no other part of the circuit is within min_d of p
+	var j := _nearest_global(p)
+	var apart: int = absi(posmod(j - own + _n / 2, _n) - _n / 2)
+	return apart < 25 or Vector2(_pos[j].x - p.x, _pos[j].z - p.z).length() > min_d
+
+func _on_pit_straight(p: Vector3) -> bool:
+	return absf(p.z) < 34.0 and p.x > -370.0 and p.x < 460.0
+
+func _build_dressing() -> void:
+	## braking boards, marshal posts, sponsor banners on the armco, spectators in the stands
+	var buf := MeshBuf.new()
+	var labels: Array[Label3D] = []
+	# --- 150 / 100 / 50 m boards before every slow corner, on the outside
+	var mask := PackedByteArray()
+	mask.resize(_n)
+	for i in range(_n):
+		mask[i] = 1 if absf(_kappa_s[i]) > 1.0 / 110.0 else 0
+	for r: Vector2i in _runs(mask, 8):
+		var turn := signf(_kappa_s[r.x + r.y / 2])
+		for dist in [150, 100, 50]:
+			var i := posmod(r.x - int(float(dist) / _ds), _n)
+			var p := _pos[i] + _right[i] * (-turn * 10.5)
+			if _on_pit_straight(p) or not _clear_of_track(p, i, 12.0):
+				continue
+			var gy := terrain_height(p.x, p.z)
+			var face := Basis.looking_at(_tan[i], Vector3.UP)      # front (+Z) towards the cars
+			var xf := Transform3D(face, Vector3(p.x, gy, p.z))
+			_box(buf, xf * Vector3(0, 0.6, 0.05), Vector3(0.12, 1.2, 0.12), Color(0.35, 0.35, 0.37))
+			buf.quad(xf * Vector3(-0.6, 1.2, 0.0), xf * Vector3(0.6, 1.2, 0.0), xf * Vector3(0.6, 2.0, 0.0), xf * Vector3(-0.6, 2.0, 0.0),
+					face.z, Color(0.95, 0.95, 0.95))
+			var lb := Label3D.new()
+			lb.text = str(dist)
+			lb.font_size = 72
+			lb.pixel_size = 0.009
+			lb.modulate = Color(0.05, 0.05, 0.05)
+			lb.outline_size = 0
+			lb.transform = Transform3D(face, xf * Vector3(0, 1.6, 0.02))
+			labels.append(lb)
+	# --- marshal posts every ~400 m, behind the barrier, alternating sides
+	var side := 1.0
+	var i2 := 0
+	while i2 < _n:
+		side = -side
+		var gout: PackedFloat32Array = _gravel_out[0 if side < 0 else 1] if _gravel_out.size() == 2 else _fill(0.0)
+		var lat: float = maxf(15.0, gout[i2] + 2.5) + 3.0
+		var p2 := _pos[i2] + _right[i2] * (side * lat)
+		if not _on_pit_straight(p2) and _clear_of_track(p2, i2, lat + 2.0):
+			var gy2 := terrain_height(p2.x, p2.z)
+			var b2 := Basis.looking_at(-_right[i2] * side, Vector3.UP)
+			var x2 := Transform3D(b2, Vector3(p2.x, gy2, p2.z))
+			_box(buf, x2 * Vector3(0, 1.1, 0), Vector3(1.6, 2.2, 1.3), Color(0.95, 0.42, 0.05))
+			_box(buf, x2 * Vector3(0, 2.3, 0), Vector3(1.9, 0.15, 1.6), Color(0.92, 0.92, 0.92))
+			_box(buf, x2 * Vector3(0, 1.4, 0.66), Vector3(1.0, 0.6, 0.02), Color(0.12, 0.15, 0.2))
+			_box(buf, x2 * Vector3(0.7, 3.0, 0.5), Vector3(0.04, 1.5, 0.04), Color(0.3, 0.3, 0.3))
+			_box(buf, x2 * Vector3(0.92, 3.5, 0.5), Vector3(0.4, 0.3, 0.02), Color(0.1, 0.55, 0.15))
+		i2 += 200
+	# --- sponsor banners on the armco, facing the track
+	var names := ["APEX TYRES", "TURBO OIL", "VALLEY GP", "NITRO FUEL", "GRIP+", "DRIFT CUP", "CARBON WORKS", "RAPID BRAKES"]
+	var cols := [Color(0.75, 0.1, 0.08), Color(0.1, 0.3, 0.7), Color(0.95, 0.75, 0.05), Color(0.08, 0.45, 0.2),
+		Color(0.1, 0.1, 0.12), Color(0.55, 0.1, 0.55), Color(0.85, 0.85, 0.88), Color(0.95, 0.4, 0.05)]
+	for k in _banner_spots.size():
+		var xf3: Transform3D = _banner_spots[k]
+		var c: Color = cols[k % cols.size()]
+		buf.quad(xf3 * Vector3(-2.4, -0.18, 0.0), xf3 * Vector3(2.4, -0.18, 0.0), xf3 * Vector3(2.4, 0.18, 0.0), xf3 * Vector3(-2.4, 0.18, 0.0),
+				xf3.basis.z, c)
+		var lb2 := Label3D.new()
+		lb2.text = names[k % names.size()]
+		lb2.font_size = 64
+		lb2.pixel_size = 0.0045
+		lb2.outline_size = 0
+		lb2.modulate = Color(0.05, 0.05, 0.05) if c.get_luminance() > 0.5 else Color(1, 1, 1)
+		lb2.transform = Transform3D(xf3.basis, xf3 * Vector3(0, 0, 0.015))
+		labels.append(lb2)
+	var mesh := ArrayMesh.new()
+	buf.commit(mesh, _vc_mat(0.7))
+	_add_mesh("TrackDressing", mesh)
+	for lb3 in labels:
+		add_child(lb3)
+	_build_crowd()
+
+func _build_crowd() -> void:
+	## spectators on the grandstand tiers (pit straight), standing in loose groups
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	var xf: Array[Transform3D] = []
+	var col: Array[Color] = []
+	var shirts := [Color(0.8, 0.1, 0.1), Color(0.1, 0.25, 0.7), Color(0.9, 0.9, 0.9), Color(0.1, 0.1, 0.1),
+		Color(0.95, 0.75, 0.1), Color(0.2, 0.55, 0.25), Color(0.95, 0.45, 0.1), Color(0.5, 0.5, 0.55)]
+	var face := Basis.looking_at(Vector3(0, 0, -1), Vector3.UP)
+	for cx in [-250.0, -140.0, -30.0]:
+		for t in 6:
+			var x: float = cx - 48.0
+			while x < cx + 48.0:
+				x += rng.randf_range(0.55, 0.9)
+				if rng.randf() < 0.3:
+					continue
+				var h := rng.randf_range(0.92, 1.08)
+				var z := 25.5 + 2.5 * t + rng.randf_range(-0.4, 0.4)
+				xf.append(Transform3D(face.scaled(Vector3(1.0, h, 1.0)), Vector3(x, float(t + 1) + 0.55 * h, z)))
+				col.append((shirts[rng.randi() % shirts.size()] as Color) * rng.randf_range(0.8, 1.1))
+	var m := CapsuleMesh.new()
+	m.radius = 0.2
+	m.height = 1.1
+	m.radial_segments = 6
+	m.rings = 2
+	m.material = _vc_mat(0.9)
+	_add_multimesh("Crowd", m, xf, col, false)
+
 func _smooth_lat(a: PackedFloat32Array) -> PackedFloat32Array:
 	## ease the barrier line in and out where it steps back behind a gravel trap
 	var out: PackedFloat32Array = a.duplicate()
@@ -1161,6 +1273,8 @@ func _barrier_run(armco: MeshBuf, col: MeshBuf, posts: Array[Transform3D], i0: i
 			buf.quad(a_in + up0, a_in + up1, b_in + up1, b_in + up0, -ra, c)
 			buf.quad(a_out + up0, a_out + up1, b_out + up1, b_out + up0, ra, c)
 		if k % 2 == 0:
+			if k % 30 == 14:
+				_banner_spots.append(Transform3D(Basis.looking_at(ra, Vector3.UP), Vector3(pa.x, ga + 0.62, pa.z) - ra * 0.12))   # front faces the track
 			# solid collision every 4 m: up to catch-fence height, so cars cannot climb over
 			var ic: int = posmod(i0 + mini(k + 2, count), _n)
 			var pc: Vector3 = _pos[ic] + _right[ic] * (sd * lats[ic])

@@ -45,8 +45,8 @@ func _ready() -> void:
 	if selftest != "":
 		# test runs render as fast as they can (no waiting on the display's refresh)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	var use_track := selftest in ["", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack"]
-	var use_race := selftest in ["", "race", "raceshot", "ai1", "dentshot", "menushot", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack"]
+	var use_track := selftest in ["", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]
+	var use_race := selftest in ["", "race", "raceshot", "ai1", "dentshot", "menushot", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]
 	skids = SkidMarks.new()
 	skids.name = "SkidMarks"
 	add_child(skids)
@@ -54,6 +54,11 @@ func _ready() -> void:
 	if use_track:
 		world.position = PROVING_OFFSET
 	add_child(world)
+	if selftest == "":
+		var sv := SaveGame.load_settings(last_car == "")
+		if not sv.is_empty() and last_car == "":
+			player_model = sv["car"]
+			GameMenu.saved = {"laps": sv["laps"], "opponents": sv["opponents"]}
 	if last_car != "":
 		player_model = last_car
 	car = Car.new()
@@ -90,7 +95,7 @@ func _ready() -> void:
 			race.ai_count = 0
 		add_child(race)
 		race.setup(track, car, cam)
-		if selftest in ["race", "raceshot", "ai1", "champtest", "tttest", "replayshot", "startshot", "offtrack"]:
+		if selftest in ["race", "raceshot", "ai1", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]:
 			var drv := AIDriver.new()
 			drv.name = "Driver"
 			drv.race = race
@@ -122,6 +127,12 @@ func _ready() -> void:
 		line_assist.race = race
 		line_assist.car = car
 		add_child(line_assist)
+	if selftest == "" or selftest in ["raceshot", "startshot", "menushot"]:
+		var pfx := PostFX.new()
+		pfx.name = "PostFX"
+		pfx.car = car
+		pfx.cam = cam
+		add_child(pfx)
 	hud = Hud.new()
 	add_child(hud)
 	hud.car = car
@@ -141,13 +152,15 @@ func _ready() -> void:
 		add_child(menu)
 		if race != null:
 			race.car_finished.connect(_on_car_finished)
+		if track != null:
+			track.lap_completed.connect(_on_lap_record)
 		open_main_menu()
 	if selftest != "":
 		hud.visible = selftest == "raceshot"
 		audio.toggle_mute()
 		if selftest == "crash" or selftest == "crashshot":
 			world._body(Vector3(100, 0.7, 40), Vector3(12, 1.4, 1.0), world.concrete_mat)
-		if not selftest in ["bumps", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack"]:
+		if not selftest in ["bumps", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]:
 			car.reset_car(Vector3(100, 0.15, 150), 0.0)
 	if selftest == "menushot":
 		_menushot()
@@ -234,12 +247,19 @@ func start_race(settings: Dictionary) -> void:
 	CarSpecs.arcade = settings["arcade"]
 	Weather.time_of_day = settings.get("time", "day")
 	Weather.rain = settings.get("rain", false)
-	if kind == "championship":
+	if kind == "continue":
+		SaveGame.load_championship()
+		kind = "championship"
+	elif kind == "championship":
 		Championship.start()
-		Weather.time_of_day = Championship.current()["time"]
-		Weather.rain = Championship.current()["rain"]
 	else:
 		Championship.stop()
+	if Championship.active:
+		Weather.time_of_day = Championship.current()["time"]
+		Weather.rain = Championship.current()["rain"]
+		SaveGame.save_championship()
+	if menu != null:
+		SaveGame.save_settings(settings["car"], menu.laps, menu.opponents)
 	weather.apply()
 	last_car = settings["car"]
 	if settings["car"] != car.spec_id:
@@ -270,9 +290,11 @@ func next_round() -> void:
 	## championship: on to the next round (conditions change), or show the final table
 	if Championship.is_last_round():
 		Championship.next_round()
+		SaveGame.save_championship()
 		menu.show_pause(true)
 		return
 	Championship.next_round()
+	SaveGame.save_championship()
 	Weather.time_of_day = Championship.current()["time"]
 	Weather.rain = Championship.current()["rain"]
 	weather.apply()
@@ -280,6 +302,11 @@ func next_round() -> void:
 	_begin_session()
 	_go()
 	hud.flash(Championship.current()["name"] + ("  -  wet track, less grip" if Weather.rain else ""))
+
+func _on_lap_record(t: float, _n: int) -> void:
+	## every completed lap of yours counts towards the record for this car and these conditions
+	if SaveGame.record_lap(car.spec_id, t) and race != null:
+		race.say("NEW LAP RECORD  %s" % _fmt(t), 4.0)
 
 func watch_replay() -> void:
 	menu.hide_menu()
@@ -321,14 +348,15 @@ func results_text(race_over: bool) -> String:
 	return out.strip_edges()
 
 func best_lap_text(id: String, time: String, wet: bool, arc: bool) -> String:
+	var lap := SaveGame.best_lap(id)
+	var out := "Lap record (this car, circuit, conditions): %s" % (_fmt(lap) if lap > 0.0 else "none yet")
 	var key := "user://ghost_%s_%s%s%s.dat" % [id, time, "_wet" if wet else "", "_arcade" if arc else ""]
-	if not FileAccess.file_exists(key):
-		return "Time trial record (this car, these conditions): none yet"
-	var f := FileAccess.open(key, FileAccess.READ)
-	var d = f.get_var()
-	if d is Dictionary:
-		return "Time trial record (this car, these conditions): %s" % _fmt(d.get("time", 0.0))
-	return ""
+	if FileAccess.file_exists(key):
+		var f := FileAccess.open(key, FileAccess.READ)
+		var d = f.get_var()
+		if d is Dictionary:
+			out += "\nTime trial ghost: %s" % _fmt(d.get("time", 0.0))
+	return out
 
 func restart_race() -> void:
 	if race != null:
@@ -365,6 +393,7 @@ func _on_car_finished(c: Car, _place: int, _time: float) -> void:
 		for o in race.dnf.keys():
 			names.append(race.name_of(o))            # retired: listed, but outside the points
 		Championship.record(names.slice(0, race.cars.size() - race.dnf.size()))
+		SaveGame.save_championship()
 		for o in race.dnf.keys():
 			if not Championship.points.has(race.name_of(o)):
 				Championship.points[race.name_of(o)] = 0
@@ -388,6 +417,9 @@ func _swap_player(id: String) -> void:
 	car.reset_car(xf.origin + Vector3(0, 0.3, 0), xf.basis.get_euler().y)
 	cam.target = car
 	hud.car = car
+	var pfx2 := get_node_or_null("PostFX") as PostFX
+	if pfx2 != null:
+		pfx2.car = car
 	audio.bind(car)
 	if track != null:
 		track.car = car
@@ -439,7 +471,8 @@ func _physics_process(dt: float) -> void:
 		"tttest": _run_tttest()
 		"replayshot": _run_replayshot()
 		"startshot": _run_startshot()
-		"offtrack": _run_offtrack()                         # driven by _menushot() timers
+		"offtrack": _run_offtrack()
+		"rearshot": _run_rearshot()                         # driven by _menushot() timers
 		_: finish("unknown test")
 
 func finish(msg := "") -> void:
@@ -789,6 +822,8 @@ func _run_audio() -> void:
 		var v := clampi(int(f.x * 32000.0), -32768, 32767)
 		_wav.append(v & 0xff)
 		_wav.append((v >> 8) & 0xff)
+	if _tick(4) and _t > 3.5:
+		_log.append("t=%.2f gear=%d rpm=%.0f thr=%.2f blip=%.2f pops=%d" % [_t, car.gear, car.engine_rpm, car.throttle, car.blip_t, car.pops])
 	if _t > 20.0:
 		var w := AudioStreamWAV.new()
 		w.format = AudioStreamWAV.FORMAT_16_BITS
@@ -1149,3 +1184,28 @@ func _run_offtrack() -> void:
 			_ot_tpk = _ot_t
 		_ot_spin = maxf(_ot_spin, car.angular_velocity.length())
 	car.ai_input = {"throttle": 0.4, "brake": 0.0, "steer": 0.0, "handbrake": 0.0}
+
+func _run_rearshot() -> void:
+	## close-ups of the rear of every car (diffuser, exhaust, wing, lights)
+	var frame := int(_t * 120.0)
+	var ids := CarSpecs.ORDER
+	var k := frame / 90
+	if frame % 90 == 1 and k < ids.size():
+		if ids[k] != car.spec_id:
+			_swap_player(ids[k])
+		hud.visible = false
+		cam.mode = 3
+		var bz := car.global_transform.basis.z
+		cam.orbit_yaw = atan2(bz.x, bz.z) + 0.55
+		cam.orbit_pitch = 0.12
+		cam.orbit_dist = 5.0
+	elif frame % 90 == 60 and k < ids.size():
+		_snap("rear_" + ids[k])
+		var bz2 := car.global_transform.basis.z
+		cam.orbit_yaw = atan2(bz2.x, bz2.z) + 0.12
+		cam.orbit_pitch = -0.02
+		cam.orbit_dist = 3.6
+	elif frame % 90 == 85 and k < ids.size():
+		_snap("rear_low_" + ids[k])
+	if k >= ids.size():
+		finish("rear shots")

@@ -81,8 +81,80 @@ func _make_emitter(col: Color, amount: int, life: float, size: float, grow: floa
 	p.draw_pass_1 = q
 	return p
 
+var _flames: Array[MeshInstance3D] = []
+var _flash: OmniLight3D
+var _flame_t := 0.0
+var _last_pops := 0
+var _discs: Array[StandardMaterial3D] = []
+
+func _setup_flames() -> void:
+	## a short flame from each exhaust tip, and a flash of light, on every pop
+	var ex: Vector2 = car.spec.get("exhaust", Vector2(0.2, 0.28))
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.055
+	cone.height = 0.38
+	cone.radial_segments = 10
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(1.0, 0.55, 0.2, 0.85)
+	m.disable_receive_shadows = true
+	cone.material = m
+	for sx in [-1.0, 1.0]:
+		var f := MeshInstance3D.new()
+		f.mesh = cone
+		f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# cylinder axis is Y: lay it along +Z (backwards out of the tip)
+		f.rotation = Vector3(PI * 0.5, 0.0, 0.0)
+		f.position = Vector3(sx * ex.x, ex.y, car.tail_len + 0.2)
+		f.visible = false
+		car.add_child(f)
+		_flames.append(f)
+	_flash = OmniLight3D.new()
+	_flash.light_color = Color(1.0, 0.55, 0.2)
+	_flash.omni_range = 3.5
+	_flash.light_energy = 0.0
+	_flash.position = Vector3(0.0, ex.y + 0.1, car.tail_len + 0.35)
+	car.add_child(_flash)
+
+func _setup_discs() -> void:
+	## each car gets its own disc material per wheel so it can glow on its own
+	for w in car.wheels:
+		var disc := car.model.find_child("Disc_" + w.tag, true, false) as MeshInstance3D
+		var mt: StandardMaterial3D = null
+		if disc != null and disc.mesh != null and disc.mesh.get_surface_count() > 0:
+			var base := disc.mesh.surface_get_material(0) as StandardMaterial3D
+			if base != null:
+				mt = base.duplicate()
+				mt.emission_enabled = true
+				mt.emission = Color(1.0, 0.25, 0.05)
+				mt.emission_energy_multiplier = 0.0
+				disc.material_override = mt
+		_discs.append(mt)
+
+func _process(dt: float) -> void:
+	if car == null:
+		return
+	if car.pops != _last_pops:
+		_last_pops = car.pops
+		_flame_t = 0.07
+		for f in _flames:
+			f.scale = Vector3.ONE * randf_range(0.7, 1.3)
+	_flame_t = maxf(_flame_t - dt, 0.0)
+	var on := _flame_t > 0.0
+	for f in _flames:
+		f.visible = on
+	_flash.light_energy = 4.0 if on else 0.0
+	for k in _discs.size():
+		if _discs[k] != null:
+			_discs[k].emission_energy_multiplier = clampf((car.brake_temp[k] - 420.0) / 260.0, 0.0, 1.0) * 3.0
+
 func setup(c: Car) -> void:
 	car = c
+	_setup_flames()
+	_setup_discs()
 	for i in car.wheels.size():
 		var s := _make_emitter(Color(0.80, 0.80, 0.82, 0.22), 110, 2.4, 0.55, 7.0)
 		var d := _make_emitter(Color(0.52, 0.44, 0.33, 0.3), 40, 1.6, 0.5, 4.0)

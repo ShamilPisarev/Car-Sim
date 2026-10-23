@@ -10,6 +10,7 @@ import os
 SPECS = {
     # front-engined GT coupe (the original car)
     "gt": dict(
+        exhaust=(0.24, 0.27),
         engine_y=1.42,
         glb="sedan.glb", nose=2.35, tail=-2.33, cowl=0.75, deck=-1.45, belt=0.84, hump=0.0,
         door=(-0.80, None),
@@ -28,7 +29,8 @@ SPECS = {
     # rear-engined fastback: sloping short nose between raised fenders, round lamps,
     # roof running in one curve down to the tail, wide hips, tall swan-neck wing
     "fastback": dict(
-        engine_y=-1.98,
+        exhaust=(0.1, 0.28),
+        engine_y=-1.80,
         glb="fastback.glb", nose=2.33, tail=-2.31, cowl=0.80, deck=-1.72, belt=0.82, hump=0.085,
         door=(-0.80, None),
         front=[(0.80, .955, .24, .82), (1.15, .96, .24, .745), (1.55, .955, .25, .64),
@@ -45,6 +47,7 @@ SPECS = {
     ),
     # long-bonnet front-mid V8: cabin pushed far back, tall shark nose, short high tail
     "longhood": dict(
+        exhaust=(0.34, 0.25),
         engine_y=1.3,
         glb="longhood.glb", nose=2.40, tail=-2.32, cowl=0.45, deck=-1.60, belt=0.86, hump=0.0,
         door=(-1.08, None),
@@ -62,7 +65,8 @@ SPECS = {
     ),
     # mid-engined: very low, cab-forward, short nose with proud front wings, long engine deck
     "midship": dict(
-        engine_y=-1.58,
+        exhaust=(0.15, 0.28),
+        engine_y=-1.45,
         glb="midship.glb", nose=2.32, tail=-2.33, cowl=0.95, deck=-1.15, belt=0.76, hump=0.07,
         door=(-0.55, None),
         front=[(0.95, .97, .22, .76), (1.30, .97, .22, .675), (1.70, .955, .23, .585),

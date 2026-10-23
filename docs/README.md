@@ -25,6 +25,16 @@ GT racing sim. Blender builds the cars by script, Godot drives them.
   60 km/h limiter; stop in the yellow box for tyres, fuel and repairs.
 - **Car setup**: rear wing, brake balance, springs, anti-roll balance, gearing (your car only).
 
+## Racing
+- **Slipstream**: up to 35 % less drag tucked in behind another car (within ~40 m); very close behind you also
+  lose some downforce in the dirty air.
+- **AI level**: Easy, Medium, Hard, Expert. Each driver has a personality (late braker, defender, steadiness)
+  and form that varies race to race; the starting order is shuffled every race.
+- **Sound and flames**: throttle blips on downshifts, pops and flames on lift-off and flat-out upshifts,
+  brake discs glow when hot.
+- **Saved between sessions**: menu choices, lap records per circuit / car / conditions, and an unfinished
+  championship (Continue championship in the menu). Stored in Godot's user folder.
+
 ## Race control
 - Track limits: whole car past the white line for over half a second = a strike. 3 warnings, then +5 s each.
 - Yellow flag (incident ahead, the AI lifts too), blue flag (leader about to lap you), chequered flag.

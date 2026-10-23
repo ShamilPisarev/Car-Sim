@@ -111,6 +111,7 @@ func stop() -> void:
 			c.freeze = race.dnf.has(c)
 	cam.mode = 0
 	cam.target = race.player
+	cam.attributes = null
 	_layer.visible = false
 	finished.emit()
 
@@ -189,3 +190,14 @@ func _tv_camera(target: Car) -> void:
 	cam.look_at(tp, Vector3.UP)
 	var dist := sqrt(bd)
 	cam.fov = clampf(rad_to_deg(2.0 * atan(7.0 / maxf(dist, 1.0))), 9.0, 60.0)
+	# long-lens TV look: the car sharp, foreground and background soft
+	if cam.attributes == null:
+		cam.attributes = CameraAttributesPractical.new()
+	var ca := cam.attributes as CameraAttributesPractical
+	ca.dof_blur_far_enabled = true
+	ca.dof_blur_far_distance = dist + 12.0
+	ca.dof_blur_far_transition = 40.0
+	ca.dof_blur_near_enabled = dist > 20.0
+	ca.dof_blur_near_distance = maxf(dist - 12.0, 1.0)
+	ca.dof_blur_near_transition = 6.0
+	ca.dof_blur_amount = 0.08

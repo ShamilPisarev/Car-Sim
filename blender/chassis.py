@@ -175,10 +175,14 @@ def build_frame(grp):
     add(tube("_ds", [(0, 0.45, 0.30), (0, AXLE_R + 0.2, 0.34)], 0.04, 'darksteel', seg=12), "Driveshaft")
     exh = []
     for sx in (-1, 1):
+        # pipes run under the floor, silencers sit up above the diffuser roof (out of sight),
+        # and open titanium tips exit through the diffuser
+        ex, ez = S["exhaust"]
         exh.append(tube("_e", [(sx * 0.22, 1.00, 0.30), (sx * 0.20, 0.5, 0.20), (sx * 0.18, -0.6, 0.18),
-                               (sx * 0.20, -1.7, 0.20), (sx * 0.20, TAIL + 0.03, 0.30)], 0.032, 'steel'))
-        exh.append(cyl("_mu", 0.075, 0.55, (sx * 0.20, -1.95, 0.24), 'Y', 'steel', seg=20))
-        exh.append(cyl("_tip", 0.05, 0.12, (sx * 0.20, TAIL, 0.32), 'Y', 'chrome', seg=16))
+                               (sx * 0.24, TAIL + 0.75, 0.30), (sx * ex, TAIL + 0.22, ez)], 0.032, 'steel'))
+        exh.append(cyl("_mu", 0.075, 0.42, (sx * 0.26, TAIL + 0.70, 0.36), 'Y', 'steel', seg=20))
+        exh.append(cyl("_tip", 0.052, 0.20, (sx * ex, TAIL + 0.06, ez), 'Y', 'titanium', seg=20))
+        exh.append(cyl("_hole", 0.041, 0.012, (sx * ex, TAIL - 0.041, ez), 'Y', 'soot', seg=20))
     add(join(exh, "Exhaust"), "Exhaust")
     for nm, ay, sy in (("SwayBar_F", AXLE_F, -0.22), ("SwayBar_R", AXLE_R, 0.22)):
         pts = [(-0.74, ay + sy * 0.4, 0.32), (-0.58, ay + sy, 0.30), (0.58, ay + sy, 0.30), (0.74, ay + sy * 0.4, 0.32)]
@@ -220,7 +224,7 @@ def build_engine_bay(grp):
             hdr.append(tube("_h", [(sx * 0.27, yy, 0.62), (sx * 0.34, yy, 0.50), (sx * 0.30, yy, 0.38),
                                    (sx * 0.22, ey - 0.45, 0.26)], 0.018, 'rust', seg=8))
     gj(hdr, "Headers")
-    gy = ey - fwd * 0.64 if ey > 0.0 else ey + (0.64 if fwd > 0 else -0.64)
+    gy = ey - fwd * 0.64 if ey > 0.0 else ey + (0.64 if fwd > 0 else -0.52)
     gj([box("_g", (0.34, 0.62, 0.30), (0, gy, 0.40), 'alum'),
         box("_bh", (0.40, 0.26, 0.34), (0, (gy + ey) * 0.5, 0.42), 'alum')], "Gearbox")
     gj([cyl("_alt", 0.05, 0.10, (0.28, ey + 0.30, 0.45), 'Y', 'alum', seg=16),

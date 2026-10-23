@@ -11,7 +11,7 @@ const ORDER := ["gt", "fastback", "longhood", "midship"]
 
 const SPECS := {
 	"gt": {
-		"title": "GT Coupe", "desc": "front-mid V8, balanced",
+		"title": "GT Coupe", "exhaust": Vector2(0.24, 0.27), "desc": "front-mid V8, balanced",
 		"glb": "res://assets/sedan.glb", "nose": 2.35, "tail": 2.33, "roof": 1.215, "cab": [-0.68, 1.47],
 		"mass": 1250.0, "com_z": 0.05, "inertia": Vector3(2300.0, 2100.0, 520.0), "engine_rear": false,
 		"limiter": 8600.0, "idle": 1100.0, "turbo": false,
@@ -22,7 +22,7 @@ const SPECS := {
 		"pulses": [1.0, 0.80, 1.10, 0.88, 0.96, 1.14, 0.84, 1.05], "res": [135.0, 410.0, 1250.0], "bright": 1.0,
 	},
 	"fastback": {
-		"title": "Fastback", "desc": "rear-engined flat-6, screams to 9,400 rpm",
+		"title": "Fastback", "exhaust": Vector2(0.10, 0.28), "desc": "rear-engined flat-6, screams to 9,400 rpm",
 		"glb": "res://assets/fastback.glb", "nose": 2.33, "tail": 2.31, "roof": 1.235, "cab": [-0.72, 1.74],
 		"mass": 1250.0, "com_z": 0.27, "inertia": Vector3(2350.0, 2250.0, 520.0), "engine_rear": true,
 		"limiter": 9400.0, "idle": 1300.0, "turbo": false,
@@ -32,7 +32,7 @@ const SPECS := {
 		"pulses": [1.0, 0.95, 1.03, 0.97, 1.01, 0.96], "res": [190.0, 620.0, 1900.0], "bright": 1.25,
 	},
 	"longhood": {
-		"title": "Long-hood", "desc": "big 6.2 V8, torque everywhere",
+		"title": "Long-hood", "exhaust": Vector2(0.34, 0.25), "desc": "big 6.2 V8, torque everywhere",
 		"glb": "res://assets/longhood.glb", "nose": 2.40, "tail": 2.32, "roof": 1.20, "cab": [-0.38, 1.62],
 		"mass": 1270.0, "com_z": 0.02, "inertia": Vector3(2400.0, 2250.0, 540.0), "engine_rear": false,
 		"limiter": 7600.0, "idle": 950.0, "turbo": false,
@@ -42,7 +42,7 @@ const SPECS := {
 		"pulses": [1.0, 0.70, 1.16, 0.80, 0.92, 1.22, 0.76, 1.08], "res": [105.0, 320.0, 980.0], "bright": 0.85,
 	},
 	"midship": {
-		"title": "Midship", "desc": "mid-engined twin-turbo V6, agile",
+		"title": "Midship", "exhaust": Vector2(0.15, 0.28), "desc": "mid-engined twin-turbo V6, agile",
 		"glb": "res://assets/midship.glb", "nose": 2.32, "tail": 2.33, "roof": 1.075, "cab": [-0.90, 1.17],
 		"mass": 1250.0, "com_z": 0.21, "inertia": Vector3(2150.0, 1900.0, 500.0), "engine_rear": true,
 		"limiter": 8200.0, "idle": 1150.0, "turbo": true,

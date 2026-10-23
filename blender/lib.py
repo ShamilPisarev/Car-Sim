@@ -46,6 +46,8 @@ def M(key):
         'steel': dict(color=(0.45, 0.45, 0.47), metal=1.0, rough=0.45),
         'darksteel': dict(color=(0.12, 0.12, 0.13), metal=0.9, rough=0.5),
         'chrome': dict(color=(0.85, 0.85, 0.88), metal=1.0, rough=0.1),
+        'titanium': dict(color=(0.46, 0.43, 0.48), metal=1.0, rough=0.28),
+        'soot': dict(color=(0.03, 0.028, 0.026), metal=0.2, rough=0.9),
         'alloy': dict(color=(0.6, 0.62, 0.65), metal=1.0, rough=0.25),
         'disc': dict(color=(0.35, 0.3, 0.28), metal=0.9, rough=0.55),
         'caliper': dict(color=(0.7, 0.05, 0.03), metal=0.3, rough=0.4),
@@ -311,6 +313,11 @@ def loft(name, stations, material, cap_first=False, cap_last=False):
         for i in range(rowlen - 1):
             a = j * rowlen + i
             faces.append((a + 1, a, ci) if first else (a, a + 1, ci))
+        # close the fan across the open bottom edge too (last point back to the first),
+        # otherwise a triangular hole is left under the nose / tail
+        a0 = j * rowlen
+        a1 = j * rowlen + rowlen - 1
+        faces.append((a0, a1, ci) if first else (a1, a0, ci))
     o = mesh_obj(name, verts, faces, material)
     # make normals point away from the car centre-line / upwards
     me = o.data

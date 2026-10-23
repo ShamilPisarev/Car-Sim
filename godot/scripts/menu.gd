@@ -33,6 +33,8 @@ var _opp_lbl: Label
 var _time_lbl: Label
 var _rain_lbl: Label
 var _line_lbl: Label
+var _ai_lbl: Label
+var _continue_btn: Button
 var _track_lbl: Label
 var _wear_lbl: Label
 var _best_lbl: Label
@@ -151,8 +153,8 @@ func _style(col: Color, border := Color(0, 0, 0, 0)) -> StyleBoxFlat:
 	s.set_corner_radius_all(7)
 	s.content_margin_left = 14
 	s.content_margin_right = 14
-	s.content_margin_top = 8
-	s.content_margin_bottom = 8
+	s.content_margin_top = 6
+	s.content_margin_bottom = 6
 	if border.a > 0.0:
 		s.border_color = border
 		s.set_border_width_all(2)
@@ -200,7 +202,7 @@ var _last_row: HBoxContainer
 func _build_main() -> Control:
 	var outer := _panel(940)
 	var title := HBoxContainer.new()
-	title.add_child(_label("CAR SIM", 46, ACCENT))
+	title.add_child(_label("CAR SIM", 40, ACCENT))
 	var sub := _label("   GT racing - 3.6 km hill circuit", 16, Color(0.7, 0.72, 0.76))
 	sub.size_flags_vertical = Control.SIZE_SHRINK_END
 	title.add_child(sub)
@@ -210,7 +212,7 @@ func _build_main() -> Control:
 	cols.add_theme_constant_override("separation", 30)
 	outer.add_child(cols)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 8)
+	vb.add_theme_constant_override("separation", 6)
 	vb.custom_minimum_size = Vector2(520, 0)
 	cols.add_child(vb)
 	var right := VBoxContainer.new()
@@ -245,6 +247,8 @@ func _build_main() -> Control:
 	vb.add_child(_last_row)
 	_opp_lbl = _stepper("Opponents", _step_opp.bind(-1), _step_opp.bind(1))
 	vb.add_child(_last_row)
+	_ai_lbl = _stepper("AI level", _step_ai.bind(-1), _step_ai.bind(1))
+	vb.add_child(_last_row)
 	_time_lbl = _stepper("Time", _step_time.bind(-1), _step_time.bind(1))
 	vb.add_child(_last_row)
 	_rain_lbl = _stepper("Weather", _toggle_rain, _toggle_rain)
@@ -265,6 +269,9 @@ func _build_main() -> Control:
 	champ.pressed.connect(_start.bind("championship"))
 	right.add_child(champ)
 	right.add_child(_hint("4 rounds: afternoon, sunset, rain, night - points for the top six"))
+	_continue_btn = _button("Continue championship")
+	_continue_btn.pressed.connect(_start.bind("continue"))
+	right.add_child(_continue_btn)
 	var tt := _button("TIME TRIAL", true)
 	tt.pressed.connect(_start.bind("timetrial"))
 	right.add_child(tt)
@@ -402,6 +409,10 @@ func _toggle_layout() -> void:
 	saved = {"laps": laps, "opponents": opponents}
 	main.change_layout(not RaceTrack.reversed)
 
+func _step_ai(d: int) -> void:
+	RaceManager.ai_level = clampi(RaceManager.ai_level + d, 0, RaceManager.AI_LEVELS.size() - 1)
+	_refresh()
+
 func _step_line(d: int) -> void:
 	RacingLineAssist.mode = posmod(RacingLineAssist.mode + d, 3)
 	_refresh()
@@ -458,6 +469,10 @@ func _refresh() -> void:
 	_time_lbl.text = time_of_day.capitalize()
 	_rain_lbl.text = "Rain" if rain else "Dry"
 	_line_lbl.text = ["Off", "Braking zones", "Full line"][RacingLineAssist.mode]
+	_ai_lbl.text = RaceManager.AI_LEVELS[RaceManager.ai_level][0]
+	var saved_round := SaveGame.saved_championship_round()
+	_continue_btn.visible = saved_round >= 0
+	_continue_btn.text = "Continue championship  (round %d of 4)" % (saved_round + 1)
 	_track_lbl.text = "Valley GP - reverse" if RaceTrack.reversed else "Valley GP"
 	_wear_lbl.text = "Wear + fuel + pit stops" if CarSetup.wear_and_fuel else "Off"
 	if main != null and main.has_method("best_lap_text"):

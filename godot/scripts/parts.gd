@@ -397,7 +397,8 @@ func _apply_hit(local_pos: Vector3, impulse: float, normal: Vector3) -> void:
 		# a nudge does not hole a radiator; a real hit does, and a harder one leaks faster
 		var rw := _weight(rad, world_p, 0.7) if rad != null else 0.0
 		if rw > 0.0 and impulse * rw > 5000.0:
-			car.leak = maxf(car.leak, 0.0015 + (impulse * rw - 5000.0) / 300000.0)
+			# a few minutes for a normal knock, much less for a big hit; a pit stop fixes it
+			car.leak = maxf(car.leak, 0.0008 + (impulse * rw - 5000.0) / 1500000.0)
 
 func _weight(node: Node3D, world_p: Vector3, reach: float) -> float:
 	if not (node is MeshInstance3D) or (node as MeshInstance3D).mesh == null:
