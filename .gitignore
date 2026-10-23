@@ -11,3 +11,7 @@ __pycache__/
 *.pyc
 trailer/
 godot/override.cfg
+exports/saba.blend
+exports/phoenix.blend
+exports/kiri.blend
+exports/cutlass.blend

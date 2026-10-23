@@ -9,7 +9,7 @@ func dump(n: Node, depth: int, out: Array) -> void:
 		dump(c, depth + 1, out)
 
 func _init() -> void:
-	var ps: PackedScene = load("res://assets/sedan.glb")
+	var ps: PackedScene = load("res://assets/cutlass.glb")
 	var root := ps.instantiate()
 	var out := []
 	dump(root, 0, out)

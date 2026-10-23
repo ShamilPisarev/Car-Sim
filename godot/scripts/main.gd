@@ -643,7 +643,7 @@ func _snap(nm: String) -> void:
 var _impact_t := -1.0
 func _run_crashshot() -> void:
 	car.ai_input = {"throttle": _cruise(100.0), "brake": 0.0, "steer": 0.0, "handbrake": 0.0}
-	if car.global_position.z < 42.5 and _impact_t < 0.0:
+	if car.global_position.z < 40.3 + car.nose_len and _impact_t < 0.0:
 		_impact_t = _t
 		cam.mode = 3
 	if _impact_t > 0.0:
@@ -1235,8 +1235,8 @@ const CLIPS := {
 	"crash": [0.0, 99.0, "DAMAGE", "Dents, broken parts, leaks and fires"],
 	"replay": [40.0, 48.0, "REPLAYS", "TV cameras with depth of field"],
 }
-const CAR_NAMES := {"gt": "GT Coupe - front V8", "fastback": "Fastback - rear flat-6",
-	"longhood": "Long-hood - big front V8", "midship": "Midship - twin-turbo V6"}
+const CAR_NAMES := {"gt": "Cutlass 442 - front V8", "fastback": "Kiri Turbo - turbo four",
+	"longhood": "Phoenix 455 - big V8", "midship": "Saba V12 - mid-engined V12"}
 
 func _trailer_setup() -> void:
 	var layer := CanvasLayer.new()
@@ -1344,7 +1344,7 @@ func _run_trailer() -> void:
 			if fr == 1:
 				_orbit_car(car, 0.9, 0.15, 9.0)
 				_caption(c[2], c[3])
-			elif car.global_position.z < 42.5 and _impact_t < 0.0:
+			elif car.global_position.z < 40.3 + car.nose_len and _impact_t < 0.0:
 				_impact_t = _t
 			if _impact_t < 0.0:
 				_orbit_car(car, 0.9 + _t * 0.08, 0.15, 9.0)
@@ -1402,5 +1402,8 @@ func _run_frontshot() -> void:
 			cam.mode = 2
 		elif f == 115:
 			_snap("cockpit_" + ids[k])
+			var sw := car.model.find_child("SteeringWheel", true, false) as Node3D
+			if sw != null:
+				_log.append("%s wheel at %s (car local) visible %s eye %s" % [ids[k], str(car.to_local(sw.global_position)), str(sw.is_visible_in_tree()), str(car.cockpit_eye)])
 	else:
 		finish("front shots")

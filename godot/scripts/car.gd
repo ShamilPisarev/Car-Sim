@@ -279,9 +279,10 @@ func _find_cockpit() -> void:
 	## the driver's eyes: about 60 cm behind the steering wheel hub and 20 cm above it
 	var tilt := model.find_child("SteeringTilt", true, false) as Node3D
 	if tilt != null:
-		cockpit_eye = to_local(tilt.global_position) + Vector3(0.02, 0.13, 0.42)
+		cockpit_eye = to_local(tilt.global_position) + spec.get("eye", Vector3(0.02, 0.13, 0.42))
 
 var _interior_view := false
+var _cabin_light: OmniLight3D
 
 func set_interior_view(on: bool) -> void:
 	## seen from the driver's seat the windscreen glass is hidden (from inside its reflections
@@ -289,6 +290,18 @@ func set_interior_view(on: bool) -> void:
 	if on == _interior_view:
 		return
 	_interior_view = on
+	# a soft fill light in the cabin: without it the dark interiors read as black holes
+	if _cabin_light == null:
+		_cabin_light = OmniLight3D.new()
+		_cabin_light.light_energy = 0.55
+		_cabin_light.omni_range = 1.6
+		_cabin_light.omni_attenuation = 1.2
+		_cabin_light.light_color = Color(1.0, 0.96, 0.9)
+		_cabin_light.shadow_enabled = false
+		_cabin_light.light_specular = 0.1
+		add_child(_cabin_light)
+		_cabin_light.position = cockpit_eye + Vector3(0.0, -0.05, -0.35)
+	_cabin_light.visible = on
 	for nm in ["Windshield", "Window_FL", "Window_FR"]:
 		var n := model.find_child(nm, true, false) as Node3D
 		if n != null and not parts.gone.has(nm):

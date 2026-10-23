@@ -17,7 +17,8 @@ GT racing sim. Blender builds the cars by script, Godot drives them.
 - **Mode**: Realistic (full damage) or Arcade (a tenth of the damage, no leaks or fires, stability
   control, +15 % grip and brakes, +8 % power).
 - **Circuit**: Valley GP (3.6 km, hills up to ~28 m) or the same circuit in reverse.
-- **Car**: GT Coupe (front V8), Fastback (rear flat-6), Long-hood (big front V8), Midship (twin-turbo V6).
+- **Car**: Cutlass 442 (front V8 sedan), Kiri Turbo (turbo four), Phoenix 455 (big V8), Saba V12 (mid-engined).
+  Bodies and interiors from Sketchfab (CC BY 4.0, see `docs/CREDITS.md`) on our own chassis, wheels and physics.
 - **Time**: day, sunset, night (floodlights, headlights). **Weather**: dry or rain (about 25 % less grip,
   spray, wet reflective track, rain sound).
 - **Driving line**: off, braking zones, or the full racing line (green push, yellow lift, red brake).
@@ -47,8 +48,10 @@ Gamepad: left stick steer (progressive curve), triggers gas/brake, A/X handbrake
 kerbs, gravel, slides and impacts.
 
 ## Files
-- `blender/variants.py` car body shapes, `blender/build_all.py` builds one car
-  (`CAR_VARIANT=midship blender --background --python blender/build_all.py`).
+- `blender/import_car.py` puts a downloaded body on our chassis and splits it into damage panels
+  (`CAR_VARIANT=midship CAR_OUT=saba.glb CAR_SRC=path/saba.glb blender --background --python blender/import_car.py`).
+  `blender/build_all.py` + `variants.py` are the older fully scripted bodies (no longer used in the game).
+- `tools/make_trailer.sh` records the trailer scenes with Godot's Movie Maker and cuts them with ffmpeg.
 - `godot/scripts/`: `car.gd` physics, `car_specs.gd` the four cars + arcade factors, `car_setup.gd` setup
   and wear/fuel option, `parts.gd` damage, `track.gd` circuit, terrain, pit lane, floodlights,
   `race.gd` race flow, racing line, flags, penalties, pit stops, `ai_driver.gd` opponents,

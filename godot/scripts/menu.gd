@@ -289,6 +289,9 @@ func _build_main() -> Control:
 		12, Color(0.55, 0.57, 0.62))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	outer.add_child(help)
+	# CC BY 4.0 asks for credit wherever the models are shown
+	outer.add_child(_label("Car models: Daniel Zhabotinsky (Saba, Phoenix, Kiri) and Barbo (Cutlass), Sketchfab, CC BY 4.0 - see docs/CREDITS.md",
+		11, Color(0.5, 0.52, 0.56)))
 	_setup_panel = _build_setup()
 	return outer.get_parent().get_parent()
 

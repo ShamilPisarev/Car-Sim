@@ -39,7 +39,7 @@ const PART_MASS := {"Hood": 11.0, "Trunk": 9.0, "Bumper_F": 7.0, "Bumper_R": 7.0
 	"Fender_R": 4.0, "Door_FL": 18.0, "Door_FR": 18.0, "Splitter": 5.0, "RearWing": 9.0, "Diffuser": 4.0,
 	"Mirror_FL": 0.8, "Mirror_FR": 0.8, "Canard_L": 0.6, "Canard_R": 0.6, "SideSkirt_L": 2.0, "SideSkirt_R": 2.0}
 const SKIP_PREFIX := ["Tire", "Rim", "Disc", "Window", "Windshield", "Rear_Glass", "Number", "Spring", "Arm_",
-	"Axle", "Damper", "TopMount", "SpringSeat", "StrutBracket", "BumpStop", "Caliper", "Knuckle", "Pedal", "SteeringWheel"]
+	"Axle", "Damper", "TopMount", "SpringSeat", "StrutBracket", "BumpStop", "Caliper", "Knuckle", "Pedal", "SteeringWheel", "Interior"]
 
 class Hinge:
 	var name := ""
@@ -466,6 +466,9 @@ func _rebuild(p: DentPanel) -> void:
 					nrm[i] = -nrm[i]
 			arr[Mesh.ARRAY_NORMAL] = nrm
 		arr[Mesh.ARRAY_TANGENT] = null
+		# imported (downloaded) bodies can carry extra channels the rebuilt mesh cannot take back
+		for ch in [Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_CUSTOM1, Mesh.ARRAY_CUSTOM2, Mesh.ARRAY_CUSTOM3, Mesh.ARRAY_BONES, Mesh.ARRAY_WEIGHTS]:
+			arr[ch] = null
 		var col := PackedColorArray()
 		col.resize(verts.size())
 		for i in verts.size():
@@ -574,9 +577,7 @@ func _detach(n: String, world_p: Vector3, impulse: float) -> void:
 			(ch as Node3D).visible = false
 	_spawned.append(rb)
 	car.mass -= mass_kg
-	get_tree().create_timer(0.6).timeout.connect(func() -> void:
-		if is_instance_valid(rb):
-			rb.collision_mask = 1 | 2 | 4)
+	_loose_settle(rb)
 
 func _hit_wheels(local_pos: Vector3, impulse: float, n_local: Vector3) -> void:
 	for w: Car.Wheel in car.wheels:
@@ -627,9 +628,19 @@ func _detach_wheel(w: Car.Wheel, impulse: float) -> void:
 	node.visible = false
 	_spawned.append(rb)
 	car.mass -= 24.0
+	_loose_settle(rb)
+
+func _loose_settle(rb: RigidBody3D) -> void:
+	## a part that breaks off starts inside the car's own collision hull: if the two could touch,
+	## the solver would push them apart hard enough to throw the car into the air. It never
+	## collides with the car it came from; other cars can hit it once it is clear (0.6 s).
+	rb.add_collision_exception_with(car)
+	car.add_collision_exception_with(rb)
+	var wr: WeakRef = weakref(rb)
 	get_tree().create_timer(0.6).timeout.connect(func() -> void:
-		if is_instance_valid(rb):
-			rb.collision_mask = 1 | 2 | 4)
+		var r: RigidBody3D = wr.get_ref() as RigidBody3D
+		if r != null:
+			r.collision_mask = 1 | 2 | 4)
 
 func repair() -> void:
 	for n in gone.keys():
