@@ -13,18 +13,29 @@ var _shake := Vector3.ZERO
 var _shake_t := 0.0
 var _fov_s := 65.0
 var _noise := FastNoiseLite.new()
+# a mouse drag borrows the orbit camera; after a short pause it glides back to the driving view
+const MOUSE_RETURN := 2.5
+var _mouse_orbit := false
+var _back_to := 0
+var _idle := 0.0
+var _blend_t := 0.0
+var _blend_from := Transform3D()
 const MODE_NAMES := ["Chase", "Hood", "Cockpit", "Orbit (mouse drag, wheel zoom)", "Top", "TV (replay)"]
 const DRIVE_MODES := 5                 # V cycles these; mode 5 is driven by the replay
 
 func cycle() -> void:
 	mode = (mode + 1) % DRIVE_MODES
 	_initialised = false
+	_mouse_orbit = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		orbit_yaw -= event.relative.x * 0.006
 		orbit_pitch = clampf(orbit_pitch + event.relative.y * 0.006, -0.2, 1.4)
-		if mode != 3:
+		_idle = 0.0
+		if mode != 3 and mode != 5:
+			_back_to = mode
+			_mouse_orbit = true
 			mode = 3
 	elif event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
@@ -38,6 +49,14 @@ func _process(dt: float) -> void:
 	var t := target.global_transform
 	var fwd := -t.basis.z
 	var flat_fwd := Vector3(fwd.x, 0, fwd.z).normalized()
+	if _mouse_orbit:
+		_idle += dt
+		if _idle > MOUSE_RETURN and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			_mouse_orbit = false
+			_blend_from = global_transform
+			_blend_t = 0.6
+			mode = _back_to
+	target.set_interior_view(mode == 2)
 	match mode:
 		0:
 			var vel := target.linear_velocity
@@ -69,7 +88,7 @@ func _process(dt: float) -> void:
 			_fov_s = lerpf(_fov_s, 62.0 + clampf(spd / 75.0, 0.0, 1.0) * 14.0, 1.0 - exp(-dt * 2.0))
 			fov = _fov_s
 		1:
-			global_position = t * (target.cockpit_eye + Vector3(0.36, -0.08, -0.72))
+			global_position = t * (target.cockpit_eye + Vector3(0.36, 0.03, -0.67))
 			global_transform.basis = t.basis
 			fov = 75.0
 		2:
@@ -77,7 +96,7 @@ func _process(dt: float) -> void:
 			var g := target.last_accel_local.limit_length(40.0)
 			global_position = t * (target.cockpit_eye - Vector3(g.x, 0.0, g.z) * 0.0012)
 			global_transform.basis = t.basis * Basis(Vector3.RIGHT, -0.04) * Basis(Vector3.FORWARD, clampf(g.x * 0.0015, -0.03, 0.03))
-			fov = 78.0
+			fov = 72.0
 		3:
 			var dir := Vector3(sin(orbit_yaw) * cos(orbit_pitch), sin(orbit_pitch), cos(orbit_yaw) * cos(orbit_pitch))
 			global_position = t.origin + Vector3(0, 0.7, 0) + dir * orbit_dist
@@ -87,3 +106,7 @@ func _process(dt: float) -> void:
 			global_position = t.origin + Vector3(0, 18, 0.1)
 			look_at(t.origin, Vector3.FORWARD)
 			fov = 60.0
+	if _blend_t > 0.0:
+		_blend_t = maxf(_blend_t - dt, 0.0)
+		var k := smoothstep(0.0, 1.0, 1.0 - _blend_t / 0.6)
+		global_transform = _blend_from.interpolate_with(global_transform, k)

@@ -169,10 +169,11 @@ def build_aero_and_lights(root, parts, body_grp):
     br = parts["Bumper_R"]
     bs = parts["Body_Sides"]
     # front splitter + endplates + canards
-    sp = join([box("_sp", (1.90, 0.45, 0.014), (0, 2.28 + FY, 0.17), 'carbon'),
-               box("_e1", (0.012, 0.45, 0.07), (-0.95, 2.28 + FY, 0.20), 'carbon'),
-               box("_e2", (0.012, 0.45, 0.07), (0.95, 2.28 + FY, 0.20), 'carbon'),
-               box("_lip", (1.90, 0.02, 0.04), (0, 2.50 + FY, 0.19), 'carbon')], "Splitter")
+    # splitter tucked under the nose: only its lip shows in front of the bumper
+    sp = join([box("_sp", (1.80, 0.32, 0.012), (0, NOSE - 0.10, 0.17), 'carbon'),
+               box("_e1", (0.012, 0.30, 0.05), (-0.90, NOSE - 0.10, 0.195), 'carbon'),
+               box("_e2", (0.012, 0.30, 0.05), (0.90, NOSE - 0.10, 0.195), 'carbon'),
+               box("_lip", (1.80, 0.015, 0.025), (0, NOSE + 0.055, 0.183), 'carbon')], "Splitter")
     reparent(sp, bf)
     for sx in (-1, 1):
         s = "L" if sx < 0 else "R"
@@ -218,10 +219,11 @@ def build_aero_and_lights(root, parts, body_grp):
     vy = NOSE - 0.23 - 0.72
     vz = top_at(S["front"], vy + 0.12) + 0.015
     if S["vents"]:
-        vents = [box("_v%d" % i, (0.20, 0.30, 0.006), (sx * 0.30, vy + 0.12, vz - 0.015), 'black') for i, sx in enumerate((-1, 1))]
+        vz -= 0.02                                        # louvres sit flush in the bonnet
+        vents = [box("_v%d" % i, (0.20, 0.30, 0.006), (sx * 0.30, vy + 0.12, vz - 0.012), 'black') for i, sx in enumerate((-1, 1))]
         for sx in (-1, 1):
             for k in range(5):
-                vents.append(box("_sl", (0.20, 0.012, 0.025), (sx * 0.30, vy + 0.06 * k, vz), 'carbon', rot=(0.3, 'X')))
+                vents.append(box("_sl", (0.20, 0.012, 0.018), (sx * 0.30, vy + 0.06 * k, vz), 'carbon', rot=(0.3, 'X')))
         reparent(join(vents, "HoodVents"), parts["Hood"])
     if S["scoop"]:
         roof_scoop = join([box("_rs", (0.30, 0.34, 0.07), (0, 0.20, 1.18), 'carbon'),
@@ -277,7 +279,6 @@ def build_aero_and_lights(root, parts, body_grp):
     dif.append(box("_rain", (0.11, 0.02, 0.05), (0, TAIL + 0.012, z_exit - 0.035), 'ledred'))
     reparent(join(dif, "Diffuser"), br)
     # plates / numbers
-    reparent(box("Plate_F", (0.46, 0.012, 0.10), (0, 2.355 + FY, 0.26), 'plate'), bf)
     reparent(box("TowHook", (0.04, 0.06, 0.04), (0.5, 2.36 + FY, 0.31), 'red'), bf)
     reparent(box("TowHookR", (0.04, 0.06, 0.04), (-0.5, -2.34 + RY, 0.34), 'red'), br)
     # race numbers

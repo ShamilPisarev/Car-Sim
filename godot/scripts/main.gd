@@ -45,8 +45,8 @@ func _ready() -> void:
 	if selftest != "":
 		# test runs render as fast as they can (no waiting on the display's refresh)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	var use_track := selftest in ["", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]
-	var use_race := selftest in ["", "race", "raceshot", "ai1", "dentshot", "menushot", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]
+	var use_track := selftest in ["", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]
+	var use_race := selftest in ["", "race", "raceshot", "ai1", "dentshot", "menushot", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]
 	skids = SkidMarks.new()
 	skids.name = "SkidMarks"
 	add_child(skids)
@@ -95,7 +95,7 @@ func _ready() -> void:
 			race.ai_count = 0
 		add_child(race)
 		race.setup(track, car, cam)
-		if selftest in ["race", "raceshot", "ai1", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]:
+		if selftest in ["race", "raceshot", "ai1", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]:
 			var drv := AIDriver.new()
 			drv.name = "Driver"
 			drv.race = race
@@ -160,7 +160,7 @@ func _ready() -> void:
 		audio.toggle_mute()
 		if selftest == "crash" or selftest == "crashshot":
 			world._body(Vector3(100, 0.7, 40), Vector3(12, 1.4, 1.0), world.concrete_mat)
-		if not selftest in ["bumps", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot"]:
+		if not selftest in ["bumps", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]:
 			car.reset_car(Vector3(100, 0.15, 150), 0.0)
 	if selftest == "menushot":
 		_menushot()
@@ -472,7 +472,8 @@ func _physics_process(dt: float) -> void:
 		"replayshot": _run_replayshot()
 		"startshot": _run_startshot()
 		"offtrack": _run_offtrack()
-		"rearshot": _run_rearshot()                         # driven by _menushot() timers
+		"rearshot": _run_rearshot()
+		"frontshot": _run_frontshot()                         # driven by _menushot() timers
 		_: finish("unknown test")
 
 func finish(msg := "") -> void:
@@ -1209,3 +1210,33 @@ func _run_rearshot() -> void:
 		_snap("rear_low_" + ids[k])
 	if k >= ids.size():
 		finish("rear shots")
+
+func _run_frontshot() -> void:
+	## the front of every car (3/4 and low), then the cockpit view while driving
+	var frame := int(_t * 120.0)
+	var ids := CarSpecs.ORDER
+	var k := frame / 120
+	if k < ids.size():
+		var f := frame % 120
+		if f == 1:
+			if ids[k] != car.spec_id:
+				_swap_player(ids[k])
+			hud.visible = false
+			cam.mode = 3
+			var fz := -car.global_transform.basis.z
+			cam.orbit_yaw = atan2(fz.x, fz.z) - 0.6
+			cam.orbit_pitch = 0.25
+			cam.orbit_dist = 5.0
+		elif f == 50:
+			_snap("front_" + ids[k])
+			var fz2 := -car.global_transform.basis.z
+			cam.orbit_yaw = atan2(fz2.x, fz2.z) + 0.1
+			cam.orbit_pitch = 0.06
+			cam.orbit_dist = 3.8
+		elif f == 85:
+			_snap("front_low_" + ids[k])
+			cam.mode = 2
+		elif f == 115:
+			_snap("cockpit_" + ids[k])
+	else:
+		finish("front shots")

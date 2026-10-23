@@ -15,14 +15,15 @@ var _all_names: Array[String] = []
 var _benched := {}                           # opponents sitting this race out
 const PLAYER_SLOT := 3                       # start from the second row: you have to earn the lead
 const LINE_MARGIN := 1.6                      # keep this far inside the white lines (car half width + air)
+# name, base, accent, stripe colour, stripes on, two-tone sides, race number
 const DRIVERS := [
-	["Vargas", Color(0.75, 0.05, 0.06), Color(0.95, 0.85, 0.1), Color(0.95, 0.95, 0.95)],
-	["Lindqvist", Color(0.92, 0.92, 0.94), Color(0.05, 0.35, 0.8), Color(0.08, 0.08, 0.1)],
-	["Okafor", Color(0.05, 0.38, 0.18), Color(0.95, 0.75, 0.1), Color(0.95, 0.95, 0.9)],
-	["Moreau", Color(0.08, 0.08, 0.09), Color(0.95, 0.3, 0.05), Color(0.85, 0.85, 0.88)],
-	["Tanaka", Color(0.95, 0.55, 0.05), Color(0.1, 0.1, 0.12), Color(0.98, 0.98, 0.98)],
-	["Novak", Color(0.45, 0.1, 0.55), Color(0.2, 0.85, 0.85), Color(0.95, 0.95, 0.95)],
-	["Brennan", Color(0.85, 0.82, 0.1), Color(0.1, 0.1, 0.1), Color(0.95, 0.2, 0.15)],
+	["Vargas", Color(0.72, 0.04, 0.05), Color(0.95, 0.95, 0.95), Color(0.95, 0.95, 0.95), false, true, 3],
+	["Lindqvist", Color(0.92, 0.92, 0.94), Color(0.05, 0.35, 0.8), Color(0.05, 0.35, 0.8), true, false, 11],
+	["Okafor", Color(0.03, 0.30, 0.15), Color(0.95, 0.75, 0.1), Color(0.95, 0.75, 0.1), true, false, 24],
+	["Moreau", Color(0.06, 0.06, 0.07), Color(0.85, 0.65, 0.2), Color(0.85, 0.65, 0.2), false, true, 44],
+	["Tanaka", Color(0.98, 0.80, 0.05), Color(0.08, 0.08, 0.09), Color(0.08, 0.08, 0.09), true, true, 63],
+	["Novak", Color(0.42, 0.10, 0.55), Color(0.2, 0.85, 0.85), Color(0.95, 0.95, 0.95), true, false, 88],
+	["Brennan", Color(0.62, 0.64, 0.66), Color(0.85, 0.1, 0.08), Color(0.85, 0.1, 0.08), false, true, 91],
 ]
 
 signal race_started
@@ -99,7 +100,8 @@ func setup(t, p: Car, cam: Node3D) -> void:
 		c.spec_id = CarSpecs.ORDER[(k + 1) % CarSpecs.ORDER.size()]   # a mixed field of all four models
 		get_parent().add_child(c)
 		var d: Array = DRIVERS[k % DRIVERS.size()]
-		c.set_livery(d[1], d[2], d[3])
+		c.set_livery(d[1], d[2], d[3], d[4], d[5])
+		c.set_race_number(d[6])
 		c.abs_enabled = true
 		c.tc_enabled = true
 		var drv := AIDriver.new()

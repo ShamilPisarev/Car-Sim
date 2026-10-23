@@ -272,4 +272,35 @@ def build_engine_bay(grp):
         s = "L" if sx < 0 else "R"
         add(cyl("_tw", 0.085, 0.14, (sx * 0.60, AXLE_F, 0.64), 'Z', 'darksteel', seg=20), f"StrutTower_{s}")
     add(box("_bat", (0.20, 0.14, 0.17), (0.0, -2.0, 0.45), 'plastic'), "Battery")
+    _fit_under_body(eb)
     return eb
+
+
+def _fit_under_body(grp):
+    """Nothing may poke out of the bonnet or the engine cover: any part whose top is above the
+    body at its position is squashed down (about the floor) until it fits."""
+    from variants import top_at
+    bpy.context.view_layer.update()
+    for o in list(grp.children):
+        if o.type != 'MESH' or len(o.data.vertices) == 0:
+            continue
+        mw = o.matrix_world.copy()
+        pts = [mw @ v.co for v in o.data.vertices]
+        top = max(p.z for p in pts)
+        yc = sum(p.y for p in pts) / len(pts)
+        if yc > S["cowl"] - 0.1:
+            cover = top_at(S["front"], yc) - 0.05
+        elif yc < S["deck"]:
+            cover = top_at(S["rear"], yc) - 0.05
+        else:
+            continue
+        if top <= cover:
+            continue
+        base = 0.24
+        k = max((cover - base) / max(top - base, 0.01), 0.2)
+        me = o.data
+        me.transform(mw)
+        me.transform(Matrix.Translation((0, 0, -base)))
+        me.transform(Matrix.Scale(k, 4, (0, 0, 1)))
+        me.transform(Matrix.Translation((0, 0, base)))
+        me.transform(mw.inverted())

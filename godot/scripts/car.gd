@@ -276,10 +276,23 @@ func _load_model() -> void:
 var cockpit_eye := Vector3(-0.36, 1.18, 0.12)   # driver's eye point, car local
 
 func _find_cockpit() -> void:
-	## the eye point sits a fixed distance behind and above the steering wheel hub
+	## the driver's eyes: about 60 cm behind the steering wheel hub and 20 cm above it
 	var tilt := model.find_child("SteeringTilt", true, false) as Node3D
 	if tilt != null:
-		cockpit_eye = to_local(tilt.global_position) + Vector3(0.02, 0.32, 0.42)
+		cockpit_eye = to_local(tilt.global_position) + Vector3(0.02, 0.13, 0.42)
+
+var _interior_view := false
+
+func set_interior_view(on: bool) -> void:
+	## seen from the driver's seat the windscreen glass is hidden (from inside its reflections
+	## only wash the picture out); from outside it stays
+	if on == _interior_view:
+		return
+	_interior_view = on
+	for nm in ["Windshield", "Window_FL", "Window_FR"]:
+		var n := model.find_child(nm, true, false) as Node3D
+		if n != null and not parts.gone.has(nm):
+			n.visible = not on
 
 func _build_collision() -> void:
 	# boxes follow the body: overhangs, cabin length and roof height differ per model
@@ -749,6 +762,8 @@ uniform sampler2D livery : source_color, filter_linear_mipmap_anisotropic;
 uniform vec3 base_col : source_color;
 uniform vec3 accent_col : source_color;
 uniform vec3 stripe_col : source_color;
+uniform float stripes = 1.0;        // 0: no racing stripes (the number roundels stay)
+uniform float two_tone = 0.0;       // 1: lower body sides in the accent colour
 void fragment() {
 	vec3 c = texture(livery, UV).rgb;
 	float w_white = smoothstep(0.55, 0.75, min(c.r, min(c.g, c.b)));
@@ -757,7 +772,22 @@ void fragment() {
 	vec3 o = c;
 	o = mix(o, base_col, w_blue);
 	o = mix(o, accent_col, w_orange);
-	o = mix(o, stripe_col, w_white);
+	// the white number roundels (door sides, bonnet, roof) stay even without stripes
+	vec2 u = UV;
+	float roundel = 0.0;
+	if (u.y < 0.5) {
+		roundel = 1.0 - step(1.0, length((u - vec2(0.5, 0.221)) / vec2(0.055, 0.095)));
+	} else {
+		roundel = max(1.0 - step(1.0, length((u - vec2(0.5, 0.885)) / vec2(0.14, 0.032))),
+			1.0 - step(1.0, length((u - vec2(0.5, 0.72)) / vec2(0.14, 0.032))));
+	}
+	float keep = max(stripes, roundel);
+	o = mix(o, mix(base_col, mix(stripe_col, vec3(0.95), roundel), keep), w_white);
+	if (two_tone > 0.5 && u.y < 0.5) {
+		float zs = u.y * 2.8;
+		float band = smoothstep(0.36, 0.38, zs) * (1.0 - smoothstep(0.58, 0.60, zs));
+		o = mix(o, accent_col, band * (1.0 - roundel) * (1.0 - w_white * stripes));
+	}
 	ALBEDO = o * COLOR.rgb;
 	METALLIC = 0.45;
 	ROUGHNESS = 0.28;
@@ -766,7 +796,7 @@ void fragment() {
 }
 """
 
-func set_livery(base: Color, accent: Color, stripe: Color) -> void:
+func set_livery(base: Color, accent: Color, stripe: Color, with_stripes := true, two_tone := false) -> void:
 	## give this car its own team colours (the shared stock paint material stays untouched)
 	var sh := Shader.new()
 	sh.code = LIVERY_SHADER
@@ -775,6 +805,8 @@ func set_livery(base: Color, accent: Color, stripe: Color) -> void:
 	sm.set_shader_parameter("base_col", base)
 	sm.set_shader_parameter("accent_col", accent)
 	sm.set_shader_parameter("stripe_col", stripe)
+	sm.set_shader_parameter("stripes", 1.0 if with_stripes else 0.0)
+	sm.set_shader_parameter("two_tone", 1.0 if two_tone else 0.0)
 	for m in model.find_children("*", "MeshInstance3D", true, false):
 		var mi := m as MeshInstance3D
 		if mi.mesh == null:
@@ -945,6 +977,32 @@ func service(tyres: bool, fuel_kg: float, repair: bool) -> void:
 	if repair:
 		parts.repair()
 		reset_crush()
+
+func set_race_number(num: int) -> void:
+	## replace the modelled "7" on the doors and bonnet with this car's own number
+	for nm in ["Number_L", "Number_R", "Number_Hood"]:
+		var mi := model.find_child(nm, true, false) as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var centre: Vector3 = mi.global_transform * mi.mesh.get_aabb().get_center()
+		mi.visible = false
+		var lb := Label3D.new()
+		lb.text = str(num)
+		lb.font_size = 96
+		lb.pixel_size = 0.0034 if nm != "Number_Hood" else 0.0038
+		lb.modulate = Color(0.04, 0.04, 0.05)
+		lb.outline_size = 0
+		lb.double_sided = false
+		mi.get_parent().add_child(lb)
+		var b := global_transform.basis
+		var face: Basis
+		if nm == "Number_L":
+			face = Basis.looking_at(b.x, b.y)                 # front of the label faces out to the left
+		elif nm == "Number_R":
+			face = Basis.looking_at(-b.x, b.y)
+		else:
+			face = Basis.looking_at(-b.y, -b.z)               # flat on the bonnet, top towards the nose
+		lb.global_transform = Transform3D(face, centre + face.z * 0.004)
 
 func _brake_torque(w: Wheel, pedal: float) -> float:
 	var base: float = BRAKE_TORQUE[w.axle]
