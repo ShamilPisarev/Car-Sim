@@ -444,9 +444,16 @@ func _swap_player(id: String) -> void:
 	if line_assist != null:
 		line_assist.car = car
 
-func _process(_dt: float) -> void:
+var _fps_t := 0.0
+func _process(dt: float) -> void:
 	if audio != null and cam != null:
 		audio.interior = cam.mode == 1 or cam.mode == 2
+	if OS.has_feature("web"):
+		# the browser build reports its frame rate in the console (F12)
+		_fps_t += dt
+		if _fps_t > 5.0:
+			_fps_t = 0.0
+			print("FPS %d  physics %.1f ms  frame %.1f ms" % [Engine.get_frames_per_second(), Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0])
 
 # ------------------------------------------------------------ self tests
 func _physics_process(dt: float) -> void:

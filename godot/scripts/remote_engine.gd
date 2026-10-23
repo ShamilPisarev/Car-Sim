@@ -4,8 +4,8 @@ extends AudioStreamPlayer3D
 ## air absorption (high frequencies fade first) and Doppler shift as it passes.
 ## A cheaper version of EngineAudio: same firing-pulse tables, two resonances, low sample rate.
 
-const RATE := 11025.0
-const MAX_DIST := 260.0
+static var RATE := 8000.0 if OS.has_feature("web") else 11025.0
+static var MAX_DIST := 80.0 if OS.has_feature("web") else 260.0   # web: only the cars close by
 
 var car: Car
 var listener: Node3D
@@ -31,6 +31,7 @@ func _ready() -> void:
 	gen.buffer_length = 0.12
 	SoundSettings.ensure_buses()
 	bus = "Opponents"
+	playback_type = AudioServer.PLAYBACK_TYPE_STREAM
 	stream = gen
 	unit_size = 9.0
 	max_db = 2.0

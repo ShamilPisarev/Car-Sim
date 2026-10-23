@@ -6,7 +6,7 @@ extends Node
 ## engine. Plus intake roar, straight-cut gear whine, overrun crackle, shift bangs, rev limiter,
 ## tyre squeal and scrub, kerb rumble, gravel / grass, road roar, wind and crash thumps.
 
-const RATE := 22050.0
+static var RATE := 16000.0 if OS.has_feature("web") else 22050.0   # the browser build has one thread for everything
 const TABLE := 1024
 
 var car: Car
@@ -127,6 +127,7 @@ func _ready() -> void:
 	player.volume_db = -3.0
 	SoundSettings.ensure_buses()
 	player.bus = "Player"
+	player.playback_type = AudioServer.PLAYBACK_TYPE_STREAM   # the web build would otherwise try to play it as a sample
 	add_child(player)
 	player.play()
 	pb = player.get_stream_playback() as AudioStreamGeneratorPlayback

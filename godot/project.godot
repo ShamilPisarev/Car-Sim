@@ -1,4 +1,4 @@
-﻿config_version=5
+config_version=5
 
 [application]
 config/name="Car Sim"
@@ -19,6 +19,9 @@ lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
 environment/ssao/quality=2
 environment/glow/upscale_mode=1
+renderer/rendering_method.web="gl_compatibility"
+lights_and_shadows/directional_shadow/size.web=4096
+anti_aliasing/quality/msaa_3d.web=0
 
 [shader_globals]
 
