@@ -9,3 +9,5 @@ godot/shots/
 *.blend1
 __pycache__/
 *.pyc
+trailer/
+godot/override.cfg

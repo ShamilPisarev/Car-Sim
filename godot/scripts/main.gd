@@ -42,11 +42,14 @@ func _ready() -> void:
 			Weather.time_of_day = a.substr(2)
 		elif a == "--arcade":
 			CarSpecs.arcade = true
+		elif a.begins_with("--clip="):
+			clip = a.substr(7)
 	if selftest != "":
 		# test runs render as fast as they can (no waiting on the display's refresh)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	var use_track := selftest in ["", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]
-	var use_race := selftest in ["", "race", "raceshot", "ai1", "dentshot", "menushot", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]
+	var trailer_track := selftest == "trailer" and not clip in ["drift", "crash"]
+	var use_track := trailer_track or selftest in ["", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]
+	var use_race := trailer_track or selftest in ["", "race", "raceshot", "ai1", "dentshot", "menushot", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]
 	skids = SkidMarks.new()
 	skids.name = "SkidMarks"
 	add_child(skids)
@@ -95,7 +98,7 @@ func _ready() -> void:
 			race.ai_count = 0
 		add_child(race)
 		race.setup(track, car, cam)
-		if selftest in ["race", "raceshot", "ai1", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]:
+		if selftest == "trailer" or selftest in ["race", "raceshot", "ai1", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]:
 			var drv := AIDriver.new()
 			drv.name = "Driver"
 			drv.race = race
@@ -127,7 +130,7 @@ func _ready() -> void:
 		line_assist.race = race
 		line_assist.car = car
 		add_child(line_assist)
-	if selftest == "" or selftest in ["raceshot", "startshot", "menushot"]:
+	if selftest == "" or selftest in ["raceshot", "startshot", "menushot", "trailer"]:
 		var pfx := PostFX.new()
 		pfx.name = "PostFX"
 		pfx.car = car
@@ -157,10 +160,13 @@ func _ready() -> void:
 		open_main_menu()
 	if selftest != "":
 		hud.visible = selftest == "raceshot"
-		audio.toggle_mute()
-		if selftest == "crash" or selftest == "crashshot":
+		if selftest != "trailer":
+			audio.toggle_mute()
+		else:
+			_trailer_setup()
+		if selftest == "crash" or selftest == "crashshot" or clip == "crash":
 			world._body(Vector3(100, 0.7, 40), Vector3(12, 1.4, 1.0), world.concrete_mat)
-		if not selftest in ["bumps", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]:
+		if not trailer_track and not selftest in ["bumps", "trackshot", "lap", "race", "raceshot", "ai1", "dentshot", "carsshot", "menushot", "hillshot", "terraincheck", "pittest", "champtest", "tttest", "replayshot", "startshot", "offtrack", "rearshot", "frontshot"]:
 			car.reset_car(Vector3(100, 0.15, 150), 0.0)
 	if selftest == "menushot":
 		_menushot()
@@ -474,6 +480,7 @@ func _physics_process(dt: float) -> void:
 		"offtrack": _run_offtrack()
 		"rearshot": _run_rearshot()
 		"frontshot": _run_frontshot()                         # driven by _menushot() timers
+		"trailer": _run_trailer()
 		_: finish("unknown test")
 
 func finish(msg := "") -> void:
@@ -1210,6 +1217,163 @@ func _run_rearshot() -> void:
 		_snap("rear_low_" + ids[k])
 	if k >= ids.size():
 		finish("rear shots")
+
+# ---------------- trailer: one scene per run, recorded with --write-movie (see tools/make_trailer.sh)
+var clip := ""
+var _cap: Label
+var _cap_sub: Label
+var _cap_t := -1.0
+const CLIPS := {
+	# clip: [start of the part that is kept, end, caption, sub caption]
+	"start": [3.0, 15.0, "LIGHTS OUT", "Six cars, five red lights, one launch"],
+	"pack": [22.0, 31.0, "WHEEL TO WHEEL", "AI rivals with their own personalities and slipstream"],
+	"rain": [20.0, 28.0, "RAIN", "Less grip, spray and a wet, mirrored track"],
+	"night": [24.0, 33.0, "NIGHT RACING", "Floodlights, headlights, exhaust flames, glowing brakes"],
+	"cockpit": [14.0, 21.0, "FROM THE DRIVER'S SEAT", "Chase, bonnet and cockpit cameras"],
+	"cars": [0.5, 12.5, "FOUR CARS", "Front V8, flat-6, big V8, twin-turbo V6"],
+	"drift": [5.5, 12.0, "PHYSICS", "Tyre model, weight transfer, real slides"],
+	"crash": [0.0, 99.0, "DAMAGE", "Dents, broken parts, leaks and fires"],
+	"replay": [40.0, 48.0, "REPLAYS", "TV cameras with depth of field"],
+}
+const CAR_NAMES := {"gt": "GT Coupe - front V8", "fastback": "Fastback - rear flat-6",
+	"longhood": "Long-hood - big front V8", "midship": "Midship - twin-turbo V6"}
+
+func _trailer_setup() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	add_child(layer)
+	var box := VBoxContainer.new()
+	box.anchor_top = 1.0
+	box.anchor_bottom = 1.0
+	box.offset_left = 70.0
+	box.offset_top = -250.0
+	box.offset_bottom = -60.0
+	box.offset_right = 1500.0
+	layer.add_child(box)
+	_cap = Label.new()
+	_cap.add_theme_font_size_override("font_size", 84)
+	_cap.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	_cap.add_theme_constant_override("shadow_offset_x", 3)
+	_cap.add_theme_constant_override("shadow_offset_y", 3)
+	box.add_child(_cap)
+	_cap_sub = Label.new()
+	_cap_sub.add_theme_font_size_override("font_size", 42)
+	_cap_sub.add_theme_color_override("font_color", Color(1.0, 0.82, 0.3))
+	_cap_sub.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	_cap_sub.add_theme_constant_override("shadow_offset_x", 2)
+	_cap_sub.add_theme_constant_override("shadow_offset_y", 2)
+	box.add_child(_cap_sub)
+	_cap.modulate.a = 0.0
+	_cap_sub.modulate.a = 0.0
+	hud.visible = clip == "start"
+	if clip == "cockpit":
+		hud.visible = false
+
+func _caption(text: String, sub: String) -> void:
+	_cap.text = text
+	_cap_sub.text = sub
+	_cap_t = 0.0
+
+func _orbit_car(c: Car, off_yaw: float, pitch: float, dist: float) -> void:
+	## camera orbit fixed relative to the car's heading (0 = straight behind)
+	var bz := c.global_transform.basis.z
+	cam.target = c
+	cam.mode = 3
+	cam.orbit_yaw = atan2(bz.x, bz.z) + off_yaw
+	cam.orbit_pitch = pitch
+	cam.orbit_dist = dist
+
+func _run_trailer() -> void:
+	var c: Array = CLIPS[clip]
+	var t0: float = c[0]
+	var t1: float = c[1]
+	var u := _t - t0                           # time into the kept part
+	if _cap_t >= 0.0:
+		_cap_t += 1.0 / 120.0
+		var a := clampf(_cap_t / 0.4, 0.0, 1.0) * clampf((3.6 - _cap_t) / 0.5, 0.0, 1.0)
+		_cap.modulate.a = a
+		_cap_sub.modulate.a = a
+	var fr := int(round(_t * 120.0))
+	if fr == int(round((t0 + 0.6) * 120.0)) and clip != "cars" and clip != "crash":
+		_caption(c[2], c[3])
+	match clip:
+		"start":
+			cam.mode = 0
+		"pack":
+			if u >= 0.0:
+				_orbit_car(car, 2.6 - u * 0.12, 0.10 + u * 0.01, 7.5)
+		"rain":
+			if u >= 0.0 and u < 4.5:
+				_orbit_car(car, 0.35 + u * 0.05, 0.08, 8.0)
+			elif u >= 4.5:
+				cam.target = car
+				cam.mode = 0
+		"night":
+			if u >= 0.0 and u < 5.0:
+				_orbit_car(car, 0.55 - u * 0.08, 0.12, 6.5)
+			elif u >= 5.0:
+				cam.target = car
+				cam.mode = 0
+		"cockpit":
+			if u >= 0.0 and u < 4.5:
+				cam.mode = 2
+			elif u >= 4.5:
+				cam.mode = 1
+		"cars":
+			var k := fr / 360
+			var f := float(fr % 360) / 120.0
+			var ids := CarSpecs.ORDER
+			if k < ids.size():
+				if fr % 360 == 1:
+					if ids[k] != car.spec_id:
+						_swap_player(ids[k])
+					var d: Array = RaceManager.DRIVERS[[4, 1, 0, 5][k]]
+					car.set_livery(d[1], d[2], d[3], d[4], d[5])
+					car.set_race_number(d[6])
+					hud.visible = false
+				if fr % 360 == 60:
+					_caption("FOUR CARS" if k == 0 else "", CAR_NAMES[ids[k]])
+				_orbit_car(car, PI + (-1.25 + f * 0.45) * (1.0 if k % 2 == 0 else -1.0), 0.08 + f * 0.02, 5.4)
+		"drift":
+			_run_drift()
+			if u >= 0.0:
+				_orbit_car(car, 1.9 - u * 0.25, 0.25, 9.0)
+			return
+		"crash":
+			car.ai_input = {"throttle": _cruise(100.0), "brake": 0.0, "steer": 0.0, "handbrake": 0.0}
+			if fr == 1:
+				_orbit_car(car, 0.9, 0.15, 9.0)
+				_caption(c[2], c[3])
+			elif car.global_position.z < 42.5 and _impact_t < 0.0:
+				_impact_t = _t
+			if _impact_t < 0.0:
+				_orbit_car(car, 0.9 + _t * 0.08, 0.15, 9.0)
+			else:
+				var d := _t - _impact_t
+				cam.mode = 3
+				cam.orbit_yaw = PI + 0.5 - d * 0.35
+				cam.orbit_pitch = 0.25
+				cam.orbit_dist = 6.5 + d
+				if d > 3.5:
+					_log.append("impact at %.2f s" % _impact_t)
+					finish("trailer clip crash")
+			if _t > 20.0:
+				finish("no impact")
+			return
+		"replay":
+			var frame := int(_t * 120.0)
+			if frame == 2:
+				race.laps = 1
+				race.restart()
+				_begin_session()
+			if frame == int(t0 * 120.0) - 1:
+				hud.visible = false
+				replay.play()
+				replay._t = 30.0 * 12.0
+	if fr == 200:
+		_log.append("caption rect %s" % str(_cap.get_global_rect()))
+	if _t > t1:
+		finish("trailer clip %s" % clip)
 
 func _run_frontshot() -> void:
 	## the front of every car (3/4 and low), then the cockpit view while driving
