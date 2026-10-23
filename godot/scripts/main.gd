@@ -23,6 +23,7 @@ static var last_car := ""                # remembered across a layout change (sc
 const PROVING_OFFSET := Vector3(1500, 0, 0)
 
 func _ready() -> void:
+	SoundSettings.load_saved()
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--selftest="):
 			selftest = a.substr(11)
@@ -177,7 +178,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	match e.keycode:
 		KEY_R:
-			if track != null and car.global_position.x < 1000.0:
+			if car.is_flipped():
+				car.flip_upright()
+			elif track != null and car.global_position.x < 1000.0:
 				var tr: Transform3D = track.respawn_transform_near(car.global_position)
 				car.reset_car(tr.origin, tr.basis.get_euler().y)
 			else:
@@ -481,6 +484,7 @@ func _physics_process(dt: float) -> void:
 		"rearshot": _run_rearshot()
 		"frontshot": _run_frontshot()                         # driven by _menushot() timers
 		"trailer": _run_trailer()
+		"fliptest": _run_fliptest()
 		_: finish("unknown test")
 
 func finish(msg := "") -> void:
@@ -969,6 +973,13 @@ func _menushot() -> void:
 	await w.call(0.5)
 	_snap("menu_setup")
 	menu._show_setup(false)
+	menu._show_sound(true)
+	menu._step_sound("opponents", -2)
+	await w.call(0.4)
+	_snap("menu_sound")
+	_log.append("sound: master %.1f player %.1f opponents %.1f, bus Opponents %.1f dB, Player bus of engine: %s" % [SoundSettings.master, SoundSettings.player, SoundSettings.opponents, AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Opponents")), audio.player.bus])
+	menu._step_sound("opponents", 2)
+	menu._show_sound(false)
 	_log.append("menu: car=%s arcade=%s laps=%d opponents=%d" % [menu.car_id, str(menu.arcade), menu.laps, menu.opponents])
 	start_race(menu._settings("race"))
 	await w.call(4.0)
@@ -1234,7 +1245,22 @@ const CLIPS := {
 	"drift": [5.5, 12.0, "PHYSICS", "Tyre model, weight transfer, real slides"],
 	"crash": [0.0, 99.0, "DAMAGE", "Dents, broken parts, leaks and fires"],
 	"replay": [40.0, 48.0, "REPLAYS", "TV cameras with depth of field"],
+	# short action trailer: no captions in the game (titles are added when cutting)
+	"q_start": [0.0, 11.0, "", ""],
+	"q_low": [0.0, 24.0, "", ""],
+	"q_flyby": [0.0, 26.0, "", ""],
+	"q_side": [0.0, 24.0, "", ""],
+	"q_cockpit": [0.0, 21.0, "", ""],
+	"q_rain": [0.0, 25.0, "", ""],
+	"q_night": [0.0, 32.0, "", ""],
+	"q_wreck": [0.0, 99.0, "", ""],
+	"q_drift": [0.0, 12.0, "", ""],
+	"q_replay": [0.0, 47.0, "", ""],
+	"q_cars": [0.0, 12.2, "", ""],
 }
+var _fly_pos := Vector3.ZERO
+var _wreck_t := -1.0
+var _wreck_p0 := Vector3.ZERO
 const CAR_NAMES := {"gt": "Cutlass 442 - front V8", "fastback": "Kiri Turbo - turbo four",
 	"longhood": "Phoenix 455 - big V8", "midship": "Saba V12 - mid-engined V12"}
 
@@ -1265,9 +1291,12 @@ func _trailer_setup() -> void:
 	box.add_child(_cap_sub)
 	_cap.modulate.a = 0.0
 	_cap_sub.modulate.a = 0.0
-	hud.visible = clip == "start"
+	hud.visible = clip == "start" or clip == "q_start"
 	if clip == "cockpit":
 		hud.visible = false
+	if clip.begins_with("q_"):
+		hud.label.visible = false
+		hud.dmg_label.visible = false
 
 func _caption(text: String, sub: String) -> void:
 	_cap.text = text
@@ -1294,9 +1323,70 @@ func _run_trailer() -> void:
 		_cap.modulate.a = a
 		_cap_sub.modulate.a = a
 	var fr := int(round(_t * 120.0))
-	if fr == int(round((t0 + 0.6) * 120.0)) and clip != "cars" and clip != "crash":
+	if fr == int(round((t0 + 0.6) * 120.0)) and clip != "cars" and clip != "crash" and not clip.begins_with("q_"):
 		_caption(c[2], c[3])
 	match clip:
+		"q_start":
+			cam.mode = 0
+		"q_low":
+			if _t > 11.0:
+				_orbit_car(car, PI - 0.55 + sin(_t * 0.4) * 0.15, 0.03, 5.2)
+		"q_side":
+			if _t > 11.0:
+				_orbit_car(car, PI * 0.5 + 0.25, 0.06, 4.6)
+		"q_cockpit":
+			if _t > 11.0:
+				cam.mode = 2
+		"q_rain":
+			if _t > 11.0:
+				_orbit_car(car, 0.28, 0.05, 6.0)
+		"q_night":
+			if _t > 11.0:
+				_orbit_car(car, 0.42, 0.07, 4.6)
+		"q_flyby":
+			# a fixed long lens beside the track, about 90 m ahead; the pack rushes past it
+			if fr == int(17.0 * 120.0):
+				var i0 := race.index_of(car)
+				var i1 := (i0 + int(90.0 / race.ds)) % race.n
+				var side := 1.0 if race.lateral_of(car) < 0.0 else -1.0
+				_fly_pos = race.center[i1] + race.right[i1] * side * 8.5 + Vector3(0, 0.9, 0)
+				cam.mode = 6
+				cam.fov = 30.0
+			if fr >= int(17.0 * 120.0):
+				cam.global_position = _fly_pos
+				cam.look_at(car.global_position + Vector3(0, 0.6, 0), Vector3.UP)
+		"q_cars":
+			var kq := fr / 180
+			var ids_q := CarSpecs.ORDER
+			if kq < ids_q.size() * 2:
+				var idq: String = ids_q[kq % ids_q.size()]
+				if fr % 180 == 1:
+					if idq != car.spec_id:
+						_swap_player(idq)
+					var dq: Array = RaceManager.DRIVERS[[4, 1, 0, 5][kq % 4]]
+					car.set_livery(dq[1], dq[2], dq[3], dq[4], dq[5])
+					car.set_race_number(dq[6])
+					hud.visible = false
+				var fq := float(fr % 180) / 120.0
+				var base_yaw: float = [PI - 0.7, 0.6, PI + 0.9, -0.5][kq % 4]
+				_orbit_car(car, base_yaw + fq * 0.6, 0.04 + 0.1 * float(kq % 2), 4.6 + 0.6 * float(kq % 3))
+		"q_drift":
+			_run_drift()
+			if _t > 6.0:
+				_orbit_car(car, 1.7 - (_t - 6.0) * 0.3, 0.06, 6.5)
+			return
+		"q_replay":
+			if fr == 2:
+				race.laps = 1
+				race.restart()
+				_begin_session()
+			if fr == int(38.0 * 120.0):
+				hud.visible = false
+				replay.play()
+				replay._t = 30.0 * 13.0
+		"q_wreck":
+			_run_wreck(fr)
+			return
 		"start":
 			cam.mode = 0
 		"pack":
@@ -1374,6 +1464,60 @@ func _run_trailer() -> void:
 		_log.append("caption rect %s" % str(_cap.get_global_rect()))
 	if _t > t1:
 		finish("trailer clip %s" % clip)
+
+func _run_fliptest() -> void:
+	## roll the car onto its roof: the turn-over button must appear and put it back on its wheels
+	var frame := int(_t * 120.0)
+	if frame == 2:
+		hud.visible = true
+		car.global_transform = Transform3D(Basis(Vector3.FORWARD, PI * 0.97), car.global_position + Vector3(0, 1.5, 0))
+	elif frame == 120 * 3:
+		_log.append("upside down: flipped=%s button=%s up.y=%.2f" % [str(car.is_flipped()), str(hud.flip_btn.visible), car.global_transform.basis.y.y])
+		_snap("flip_button")
+		hud.flip_btn.pressed.emit()
+	elif frame == 120 * 5:
+		_log.append("after button: flipped=%s button=%s up.y=%.2f height %.2f" % [str(car.is_flipped()), str(hud.flip_btn.visible), car.global_transform.basis.y.y, car.global_position.y])
+		_snap("flip_after")
+		finish("flip test done")
+
+func _run_wreck(fr: int) -> void:
+	## flat out into the barrier on the circuit, seen from a trackside camera, in slow motion
+	var cl: PackedVector3Array = track.get_centerline()
+	var rv: PackedVector3Array = track.get_right_vectors()
+	var i := 1250
+	if fr == 1:
+		var drv := car.get_node_or_null("Driver")
+		if drv != null:
+			drv.queue_free()
+		var fwd := (cl[i + 2] - cl[i - 2]).normalized()
+		var p0: Vector3 = cl[i - 15] + rv[i - 15] * 4.0
+		p0.y = track.terrain_height(p0.x, p0.z) + 0.5
+		var dir := fwd.rotated(Vector3.UP, deg_to_rad(24.0))
+		car.reset_car(p0, atan2(-dir.x, -dir.z))
+		_wreck_p0 = p0
+		car.linear_velocity = dir * 44.0
+		for w in car.wheels:
+			w.omega = 44.0 / Car.WHEEL_R
+		var hit := p0 + dir * 40.0
+		_fly_pos = hit + fwd * 13.0 + rv[i] * 4.0 + Vector3(0, 1.1, 0)
+		cam.mode = 6
+		cam.fov = 42.0
+		hud.visible = false
+	if fr > 1:
+		cam.global_position = _fly_pos
+		cam.look_at(car.global_position + Vector3(0, 0.5, 0), Vector3.UP)
+	car.hold = false
+	car.ai_input = {"throttle": 0.8 if _wreck_t < 0.0 else 0.0, "brake": 0.0 if _wreck_t < 0.0 else 0.6, "steer": 0.0, "handbrake": 0.0}
+	if _wreck_t < 0.0 and fr > 10 and car.global_position.distance_to(_wreck_p0) > 32.0:
+		_wreck_t = _t
+		Engine.time_scale = 0.3
+	if _wreck_t > 0.0 and _t - _wreck_t > 1.7:
+		Engine.time_scale = 1.0
+	if _wreck_t > 0.0 and _t - _wreck_t > 3.2:
+		_log.append("wreck at %.2f, damage: %s" % [_wreck_t, car.parts.summary()])
+		finish("trailer clip q_wreck")
+	if _t > 12.0:
+		finish("no wreck")
 
 func _run_frontshot() -> void:
 	## the front of every car (3/4 and low), then the cockpit view while driving

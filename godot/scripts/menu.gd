@@ -68,6 +68,7 @@ func _ready() -> void:
 func show_main() -> void:
 	visible = true
 	_setup_panel.visible = false
+	_sound_panel.visible = false
 	_main_panel.visible = true
 	_pause_panel.visible = false
 	_refresh()
@@ -78,6 +79,7 @@ func show_pause(race_over := false) -> void:
 	visible = true
 	_main_panel.visible = false
 	_setup_panel.visible = false
+	_sound_panel.visible = false
 	_pause_panel.visible = true
 	_pause_title.text = "RACE FINISHED" if race_over else "PAUSED"
 	_resume_btn.visible = not race_over
@@ -257,9 +259,16 @@ func _build_main() -> Control:
 	vb.add_child(_last_row)
 	_wear_lbl = _stepper("Tyres & fuel", _toggle_wear, _toggle_wear)
 	vb.add_child(_last_row)
+	var srow := HBoxContainer.new()
+	srow.add_theme_constant_override("separation", 10)
 	var setup := _button("Car setup  (wing, brakes, springs, gears)")
+	setup.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	setup.pressed.connect(_show_setup.bind(true))
-	vb.add_child(setup)
+	srow.add_child(setup)
+	var snd := _button("Sound")
+	snd.pressed.connect(_show_sound.bind(true))
+	srow.add_child(snd)
+	vb.add_child(srow)
 	# ---- right: what to play
 	_start_btn = _button("RACE", true)
 	_start_btn.pressed.connect(_start.bind("race"))
@@ -293,6 +302,7 @@ func _build_main() -> Control:
 	outer.add_child(_label("Car models: Daniel Zhabotinsky (Saba, Phoenix, Kiri) and Barbo (Cutlass), Sketchfab, CC BY 4.0 - see docs/CREDITS.md",
 		11, Color(0.5, 0.52, 0.56)))
 	_setup_panel = _build_setup()
+	_sound_panel = _build_sound()
 	return outer.get_parent().get_parent()
 
 func _start(kind: String) -> void:
@@ -340,6 +350,63 @@ func _build_setup() -> Control:
 	c.visible = false
 	_refresh_setup()
 	return c
+
+# ------------------------------------------------------------------ sound
+var _sound_panel: Control
+var _sound_lbls := {}
+var _sound_done_btn: Button
+var _sound_from: Control
+const SOUND_ROWS := [
+	["master", "Overall volume", "everything"],
+	["player", "Your car", "engine, gearbox, tyres, crashes"],
+	["opponents", "Other cars", "the opponents' engines and tyres"],
+]
+
+func _build_sound() -> Control:
+	var vb := _panel(560)
+	vb.add_child(_label("SOUND", 32, ACCENT))
+	vb.add_child(_hint("Changes are heard at once and saved. F2 mutes everything while driving."))
+	vb.add_child(HSeparator.new())
+	for r in SOUND_ROWS:
+		_sound_lbls[r[0]] = _stepper(r[1], _step_sound.bind(r[0], -1), _step_sound.bind(r[0], 1))
+		vb.add_child(_last_row)
+		vb.add_child(_hint(r[2]))
+	var back := _button("Done", true)
+	back.pressed.connect(_show_sound.bind(false))
+	vb.add_child(back)
+	_sound_done_btn = back
+	var c := vb.get_parent().get_parent() as Control
+	c.visible = false
+	_refresh_sound()
+	return c
+
+func _show_sound(on: bool) -> void:
+	if on:
+		_sound_from = _pause_panel if _pause_panel.visible else _main_panel
+		_sound_from.visible = false
+		_sound_panel.visible = true
+		_sound_done_btn.grab_focus()
+	else:
+		SoundSettings.save()
+		_sound_panel.visible = false
+		var back_to := _sound_from if _sound_from != null else _main_panel
+		back_to.visible = true
+		if back_to == _pause_panel:
+			(_resume_btn if _resume_btn.visible else _restart_btn).grab_focus()
+		else:
+			_start_btn.grab_focus()
+
+func _step_sound(key: String, d: int) -> void:
+	var v := SoundSettings.value(key)
+	v = clampf(snappedf(v + d * 0.1, 0.1), 0.0, 1.0)
+	SoundSettings.set_value(key, v)
+	SoundSettings.apply()
+	_refresh_sound()
+
+func _refresh_sound() -> void:
+	for r in SOUND_ROWS:
+		var v := SoundSettings.value(r[0])
+		_sound_lbls[r[0]].text = "off" if v <= 0.001 else "%d %%" % int(round(v * 100.0))
 
 func _reset_setup() -> void:
 	CarSetup.reset()
@@ -395,6 +462,9 @@ func _build_pause() -> Control:
 	_restart_btn = _button("Restart race")
 	_restart_btn.pressed.connect(func() -> void: main.restart_race())
 	vb.add_child(_restart_btn)
+	var snd := _button("Sound  (volume)")
+	snd.pressed.connect(_show_sound.bind(true))
+	vb.add_child(snd)
 	var settings := _button("Main menu  (mode, car, laps)")
 	settings.pressed.connect(func() -> void: main.open_main_menu())
 	vb.add_child(settings)

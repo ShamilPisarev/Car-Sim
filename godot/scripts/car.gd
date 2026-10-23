@@ -1105,6 +1105,25 @@ func reset_car(pos: Vector3, yaw: float = 0.0) -> void:
 	manual = false
 	_prev_vel = Vector3.ZERO
 
+func is_flipped() -> bool:
+	## on its roof or on its side
+	return global_transform.basis.y.y < 0.35
+
+func flip_upright() -> void:
+	## put the car back on its wheels where it lies, facing the way it was pointing
+	var fwd := -global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length() < 0.1:
+		fwd = global_transform.basis.y
+		fwd.y = 0.0
+	var yaw := atan2(-fwd.x, -fwd.z)
+	var p := global_position
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 3, 0), p - Vector3(0, 8, 0), 1)
+	q.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var gy: float = (hit.position as Vector3).y if hit.size() > 0 else p.y
+	reset_car(Vector3(p.x, gy + 0.6, p.z), yaw)
+
 func handle_part_key(key: int) -> void:
 	match key:
 		KEY_E:

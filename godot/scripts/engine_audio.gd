@@ -125,6 +125,8 @@ func _ready() -> void:
 	player = AudioStreamPlayer.new()
 	player.stream = gen
 	player.volume_db = -3.0
+	SoundSettings.ensure_buses()
+	player.bus = "Player"
 	add_child(player)
 	player.play()
 	pb = player.get_stream_playback() as AudioStreamGeneratorPlayback

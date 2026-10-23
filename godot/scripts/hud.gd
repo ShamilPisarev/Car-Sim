@@ -13,6 +13,8 @@ var dmg_label: Label
 var panel: Control
 var _flash := ""
 var _flash_t := 0.0
+var flip_btn: Button
+var _flipped_t := 0.0
 
 func _ready() -> void:
 	label = _make_label(Vector2(16, 12), 15)
@@ -20,6 +22,17 @@ func _ready() -> void:
 	panel = HudDraw.new()
 	add_child(panel)
 	(panel as HudDraw).hud = self
+	# pops up when your car lies on its roof or side and has stopped
+	flip_btn = Button.new()
+	flip_btn.text = "  TURN THE CAR OVER   (R / pad Y)  "
+	flip_btn.add_theme_font_size_override("font_size", 26)
+	flip_btn.set_anchors_preset(Control.PRESET_CENTER)
+	flip_btn.position = Vector2(-260, -170)
+	flip_btn.custom_minimum_size = Vector2(520, 64)
+	flip_btn.focus_mode = Control.FOCUS_NONE
+	flip_btn.visible = false
+	flip_btn.pressed.connect(func() -> void: car.flip_upright())
+	add_child(flip_btn)
 
 func _make_label(pos: Vector2, size: int) -> Label:
 	var l := Label.new()
@@ -45,6 +58,13 @@ func _process(dt: float) -> void:
 	if car == null:
 		return
 	_flash_t = maxf(_flash_t - dt, 0.0)
+	if car.is_flipped() and car.linear_velocity.length() < 4.0:
+		_flipped_t += dt
+	else:
+		_flipped_t = 0.0
+	flip_btn.visible = _flipped_t > 1.0 and car.ai_input.is_empty()
+	if flip_btn.visible and Input.is_joy_button_pressed(0, JOY_BUTTON_Y):
+		car.flip_upright()
 	var t := "%s  -  %s     Esc menu\n" % ["ARCADE" if CarSpecs.arcade else "REALISTIC", car.spec["title"]]
 	if Championship.active and Championship.round_index < Championship.ROUNDS.size():
 		t += "CHAMPIONSHIP  %s\n" % Championship.current()["name"]
@@ -72,7 +92,7 @@ func _process(dt: float) -> void:
 		t += "PIT LANE - limiter 60 km/h   (stop in the yellow box for tyres, fuel, repairs)\n"
 	t += "ABS %s   TC %s%s   DRIFT ASSIST %s   gearbox %s   camera: %s\n" % [
 		"on" if car.abs_enabled else "off", "on" if car.tc_enabled else "off", " (cutting)" if car.tc_active else "",
-		"on" if car.assist_enabled else "off", "manual" if car.manual else "auto", ChaseCam.MODE_NAMES[cam.mode]]
+		"on" if car.assist_enabled else "off", "manual" if car.manual else "auto", ChaseCam.MODE_NAMES[cam.mode] if cam.mode < ChaseCam.MODE_NAMES.size() else "fixed"]
 	t += "engine %d C   coolant %d%%   drift angle %d deg   g: %.1f lat  %.1f long\n" % [
 		int(car.engine_temp), int(car.coolant * 100.0), int(absf(rad_to_deg(car.drift_angle))),
 		car.last_accel_local.x / 9.81, -car.last_accel_local.z / 9.81]

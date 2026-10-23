@@ -29,6 +29,8 @@ var _to := PackedFloat32Array()
 func _ready() -> void:
 	gen.mix_rate = RATE
 	gen.buffer_length = 0.12
+	SoundSettings.ensure_buses()
+	bus = "Opponents"
 	stream = gen
 	unit_size = 9.0
 	max_db = 2.0
